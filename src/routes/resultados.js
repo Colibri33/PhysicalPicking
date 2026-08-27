@@ -11,7 +11,7 @@ import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { supabaseAdmin } from '../supabaseAdmin.js';
 import { cifrarJSON, descifrarJSON } from '../utils/crypto.js';
-import { validarParticipante, validarPayloadAnalisis } from '../utils/validacion.js';
+import { validarParticipante, validarPayloadAnalisis, validarValoresAnalisis } from '../utils/validacion.js';
 
 export const resultadosRouter = Router();
 
@@ -35,9 +35,14 @@ resultadosRouter.post('/', requireAuth, async (req, res) => {
   }
   const { nombre, edad } = validacionParticipante;
 
-  const validacionPayload = validarPayloadAnalisis(payload);
-  if (!validacionPayload.ok) {
-    return res.status(400).json({ error: validacionPayload.error });
+  const validacionEstructura = validarPayloadAnalisis(payload);
+  if (!validacionEstructura.ok) {
+    return res.status(400).json({ error: validacionEstructura.error });
+  }
+
+  const validacionValores = validarValoresAnalisis(payload);
+  if (!validacionValores.ok) {
+    return res.status(400).json({ error: validacionValores.error });
   }
 
   const consentido = await tieneConsentimientoVigente(req.usuario.id);
@@ -63,7 +68,12 @@ resultadosRouter.post('/', requireAuth, async (req, res) => {
     .select('id, participante_nombre, participante_edad, es_menor_edad, creado_en')
     .single();
 
-  if (error) return res.status(500).json({ error: 'No se pudo guardar el resultado.' });
+  if (error) {
+    // No ocultar el motivo real en los logs del servidor (aunque al
+    // cliente se le de un mensaje generico por seguridad).
+    console.error('Error al insertar resultado en Supabase:', error);
+    return res.status(500).json({ error: 'No se pudo guardar el resultado.' });
+  }
 
   await supabaseAdmin.from('auditoria_accesos').insert({
     usuario_id: req.usuario.id,
@@ -82,7 +92,10 @@ resultadosRouter.get('/', requireAuth, async (req, res) => {
     .eq('usuario_id', req.usuario.id)
     .order('creado_en', { ascending: false });
 
-  if (error) return res.status(500).json({ error: 'No se pudo leer el historial.' });
+  if (error) {
+    console.error('Error al leer resultados de Supabase:', error);
+    return res.status(500).json({ error: 'No se pudo leer el historial.' });
+  }
 
   const historial = data.map(fila => {
     try {
@@ -98,8 +111,13 @@ resultadosRouter.get('/', requireAuth, async (req, res) => {
         creadoEn: fila.creado_en,
         ...payload,
       };
-    } catch {
-      return null; // registro corrupto o clave rotada: se omite en vez de tumbar la respuesta
+    } catch (e) {
+      // Error NO silencioso a nivel de servidor: se registra en los
+      // logs de Render con el id de la fila afectada para poder
+      // diagnosticar registros corruptos o con clave rotada, aunque
+      // de cara al usuario se omite en vez de tumbar toda la respuesta.
+      console.error(`No se pudo descifrar el resultado ${fila.id}:`, e.message);
+      return null;
     }
   }).filter(Boolean);
 

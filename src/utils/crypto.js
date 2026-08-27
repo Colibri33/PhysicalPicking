@@ -30,9 +30,40 @@ function obtenerClave() {
   return Buffer.from(hex, 'hex');
 }
 
+/*
+ * bufferABytea / byteaABuffer — conversion correcta entre Buffer de
+ * Node y el formato que Postgres/PostgREST esperan para columnas
+ * `bytea` quando se viaja por HTTP como JSON.
+ *
+ * BUG REAL ENCONTRADO Y CORREGIDO: supabase-js envia el body como
+ * JSON. Si se le pasa un Buffer de Node directamente, JSON.stringify
+ * invoca Buffer.prototype.toJSON() y lo serializa como
+ * {"type":"Buffer","data":[...]} — un objeto anidado, NO el string
+ * hexadecimal ("\x1a2b3c...") que Postgres entiende para bytea. El
+ * resultado es que el insert falla o guarda datos corruptos que
+ * luego no se pueden descifrar (por eso el historial aparecia con
+ * "0 registros" pese a que el guardado parecia completarse: el INSERT
+ * podia "aceptar" el valor mal formado, pero el descifrado posterior
+ * fallaba silenciosamente y la fila se descartaba).
+ *
+ * La correccion: codificar cada Buffer como el string hex que
+ * Postgres espera ANTES de insertar, y decodificar ese mismo string
+ * de vuelta a Buffer al leer.
+ */
+export function bufferABytea(buf) {
+  return '\\x' + buf.toString('hex');
+}
+
+export function byteaABuffer(valor) {
+  if (Buffer.isBuffer(valor)) return valor; // ya es un Buffer (p.ej. en pruebas locales)
+  const hex = typeof valor === 'string' && valor.startsWith('\\x') ? valor.slice(2) : valor;
+  return Buffer.from(hex, 'hex');
+}
+
 /**
  * cifrarJSON — cifra un objeto JS y devuelve las partes necesarias
- * para guardarlo en columnas `bytea` separadas (datos, iv, tag).
+ * para guardarlo en columnas `bytea` separadas (datos, iv, tag),
+ * ya codificadas como strings hex listos para insertar via Supabase.
  */
 export function cifrarJSON(objeto) {
   const clave = obtenerClave();
@@ -43,20 +74,25 @@ export function cifrarJSON(objeto) {
   const cifrado = Buffer.concat([cipher.update(textoPlano), cipher.final()]);
   const authTag = cipher.getAuthTag();
 
-  return { datosCifrados: cifrado, iv, authTag };
+  return {
+    datosCifrados: bufferABytea(cifrado),
+    iv: bufferABytea(iv),
+    authTag: bufferABytea(authTag),
+  };
 }
 
 /**
  * descifrarJSON — reconstruye el objeto original a partir de las
- * columnas guardadas.
+ * columnas leidas de Supabase (que llegan como strings hex "\x...",
+ * o como Buffer si se invoca localmente con datos ya binarios).
  */
 export function descifrarJSON({ datosCifrados, iv, authTag }) {
   const clave = obtenerClave();
-  const decipher = crypto.createDecipheriv(ALGORITHM, clave, Buffer.from(iv));
-  decipher.setAuthTag(Buffer.from(authTag));
+  const decipher = crypto.createDecipheriv(ALGORITHM, clave, byteaABuffer(iv));
+  decipher.setAuthTag(byteaABuffer(authTag));
 
   const descifrado = Buffer.concat([
-    decipher.update(Buffer.from(datosCifrados)),
+    decipher.update(byteaABuffer(datosCifrados)),
     decipher.final(),
   ]);
 
