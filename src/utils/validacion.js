@@ -2,8 +2,7 @@
    utils/validacion.js
    Validacion defensiva de los datos que llegan al endpoint de
    resultados. Basada en la estructura y los rangos REALES definidos
-   en el frontend (src/logic/modelo.js: VARS_FISICAS, VARS_COGNITIVAS,
-   normalizarValor, calcularConsolidado) — no se inventan campos ni
+   en el frontend (src/logic/modelo.js) — no se inventan campos ni
    rangos aqui.
 
    El "registro" que genera el frontend (AnalizadorWizard.jsx →
@@ -12,29 +11,67 @@
    {
      id, fecha,
      participante: { nombre, edad, genero, perfil, deporte },
-     realesF: {...}, realesC: {...},
-     fisicas: { fuerza, fuerzaExp, resistencia, velocidad, agilidad,
-                flexibilidad, coordinacion, equilibrio },   // 0-100 cada uno
-     cognitivas: { reaccion, decision, atencion, anticipacion }, // 0-100 cada uno
+     realesF: { fuerza, fuerzaExp, ... },     // valores CRUDOS reales
+                                                // (kg, segundos, metros...)
+     realesC: { reaccion, decision, ... },     // valores CRUDOS reales
+                                                // (ms, %)
+     fisicas: { fuerza, fuerzaExp, ... },      // NORMALIZADOS 0-100
+     cognitivas: { reaccion, decision, ... },  // NORMALIZADOS 0-100
      corporales: { peso, talla, grasa, muscular, grasaVisc, imc },
      consolidado: { <mismos ids de fisicas>: { base, ajCog, ajCorp, total } },
      perfilesDeportivos: {...}, rankingDeportes: [...], interpretacion: {...}
    }
+
+   ─────────────────────────────────────────────────────────────
+   FUENTE UNICA DE VERDAD — NOTA IMPORTANTE SOBRE ARQUITECTURA:
+   ─────────────────────────────────────────────────────────────
+   Frontend y backend son dos repositorios/despliegues Node
+   independientes (Render Static Site vs Render Web Service), sin
+   build compartido ni paquete npm comun entre ellos. Por lo tanto
+   NO es posible, sin introducir tooling de monorepo (workspaces),
+   que ambos importen literalmente el mismo archivo modelo.js.
+
+   La definicion CANONICA y ORIGINAL de cada variable (rango, paso,
+   unidad, direccion) vive en:
+     frontend/src/logic/modelo.js → VARS_FISICAS, VARS_COGNITIVAS
+
+   Lo que sigue en DEFINICIONES_FISICAS / DEFINICIONES_COGNITIVAS es
+   una COPIA ESPEJO manual de esos mismos valores, mantenida a mano.
+   Si cambias un rango en modelo.js, DEBES actualizar tambien aqui,
+   o backend y frontend quedaran validando cosas distintas — este
+   riesgo de desincronizacion es una limitacion real y conocida de
+   esta arquitectura de dos repos separados, no un problema resuelto.
    ═══════════════════════════════════════════════════════════════ */
 
 const NOMBRE_MAX_LEN = 120;
 const EDAD_MIN = 1;
 const EDAD_MAX = 120;
 
-// IDs reales tomados de VARS_FISICAS / VARS_COGNITIVAS en
-// frontend/src/logic/modelo.js. `fisicas`, `cognitivas` y cada
-// entrada de `consolidado` siempre usan estos mismos identificadores.
-const IDS_FISICAS = ['fuerza', 'fuerzaExp', 'resistencia', 'velocidad', 'agilidad', 'flexibilidad', 'coordinacion', 'equilibrio'];
-const IDS_COGNITIVAS = ['reaccion', 'decision', 'atencion', 'anticipacion'];
+// Copia espejo exacta de VARS_FISICAS en frontend/src/logic/modelo.js
+export const DEFINICIONES_FISICAS = [
+  { id: 'fuerza',       min: 10,   max: 100,  paso: 1,   unidad: 'kg',           direccion: 'mayor_mejor' },
+  { id: 'fuerzaExp',    min: 5,    max: 65,   paso: 1,   unidad: 'cm',           direccion: 'mayor_mejor' },
+  { id: 'resistencia',  min: 800,  max: 3200, paso: 10,  unidad: 'metros',       direccion: 'mayor_mejor' },
+  { id: 'velocidad',    min: 4.0,  max: 8.0,  paso: 0.1, unidad: 'segundos',     direccion: 'menor_mejor' },
+  { id: 'agilidad',     min: 14,   max: 26,   paso: 0.1, unidad: 'segundos',     direccion: 'menor_mejor' },
+  { id: 'flexibilidad', min: -20,  max: 30,   paso: 1,   unidad: 'cm',           direccion: 'mayor_mejor' },
+  { id: 'coordinacion', min: 3,    max: 45,   paso: 1,   unidad: 'repeticiones', direccion: 'mayor_mejor' },
+  { id: 'equilibrio',   min: 3,    max: 45,   paso: 1,   unidad: 'segundos',     direccion: 'mayor_mejor' },
+];
 
-// Rangos de los campos corporales (opcionales): los mismos limites
-// de coherencia fisica que ya se validan en el frontend
-// (StepCorporales.jsx), para que backend y frontend concuerden.
+// Copia espejo exacta de VARS_COGNITIVAS en frontend/src/logic/modelo.js
+export const DEFINICIONES_COGNITIVAS = [
+  { id: 'reaccion',     min: 150, max: 650, paso: 1, unidad: 'ms', direccion: 'menor_mejor' },
+  { id: 'decision',     min: 20,  max: 100, paso: 1, unidad: '%',  direccion: 'mayor_mejor' },
+  { id: 'atencion',     min: 20,  max: 100, paso: 1, unidad: '%',  direccion: 'mayor_mejor' },
+  { id: 'anticipacion', min: 20,  max: 100, paso: 1, unidad: '%',  direccion: 'mayor_mejor' },
+];
+
+// Rangos de los campos corporales (opcionales): no tienen un rango
+// metodologico definido en el proyecto (a diferencia de las fisicas
+// y cognitivas de arriba), solo limites de coherencia fisica basica
+// para rechazar valores absurdos. Ver StepCorporales.jsx en el
+// frontend, que usa estos mismos limites.
 const RANGOS_CORPORALES = {
   peso:      { min: 1,  max: 400 },
   talla:     { min: 30, max: 250 },
@@ -49,6 +86,39 @@ function esObjetoPlano(v) {
 
 function esNumeroValido(n) {
   return typeof n === 'number' && Number.isFinite(n); // rechaza NaN e Infinity
+}
+
+/**
+ * validarVariable — validador GENERICO de un valor contra la
+ * definicion de una variable (min/max/paso/unidad). Es la funcion
+ * base que usan tanto la validacion de valores crudos (realesF/
+ * realesC) como, en principio, cualquier otra variable con rango
+ * definido que se agregue en el futuro.
+ *
+ * @param {*} valor - el valor recibido (puede venir como string)
+ * @param {{id:string,min:number,max:number,paso?:number,unidad?:string}} definicion
+ * @returns {{ ok: true, valor: number } | { ok: false, error: string }}
+ */
+export function validarVariable(valor, definicion) {
+  const { id, min, max, unidad } = definicion;
+
+  if (valor === null || valor === undefined || valor === '') {
+    return { ok: false, error: `El valor de "${id}" es obligatorio.` };
+  }
+
+  const n = typeof valor === 'number' ? valor : Number(valor);
+  if (!esNumeroValido(n)) {
+    return { ok: false, error: `El valor de "${id}" debe ser un numero finito (recibido: ${JSON.stringify(valor)}).` };
+  }
+
+  if (n < min || n > max) {
+    return {
+      ok: false,
+      error: `El valor de "${id}" (${n}${unidad ? ' ' + unidad : ''}) esta fuera de su rango real (${min}-${max}${unidad ? ' ' + unidad : ''}).`,
+    };
+  }
+
+  return { ok: true, valor: n };
 }
 
 /**
@@ -95,7 +165,7 @@ export function validarPayloadAnalisis(payload) {
     return { ok: false, error: 'El contenido del analisis ("payload") debe ser un objeto, no un arreglo ni un valor suelto.' };
   }
 
-  const camposObjeto = ['participante', 'fisicas', 'cognitivas', 'corporales', 'consolidado', 'perfilesDeportivos', 'interpretacion'];
+  const camposObjeto = ['participante', 'realesF', 'realesC', 'fisicas', 'cognitivas', 'corporales', 'consolidado', 'perfilesDeportivos', 'interpretacion'];
   for (const campo of camposObjeto) {
     if (!esObjetoPlano(payload[campo])) {
       return { ok: false, error: `El analisis no tiene una estructura valida: falta o es invalido el campo "${campo}".` };
@@ -120,53 +190,75 @@ export function validarPayloadAnalisis(payload) {
 
 /**
  * validarValoresAnalisis — validacion PROFUNDA de los valores
- * numericos internos de fisicas / cognitivas / consolidado /
- * corporales. Se ejecuta despues de validarPayloadAnalisis (que ya
- * garantiza que estos campos existen y son objetos).
- *
- * Rechaza NaN, Infinity, tipos incorrectos, y valores fuera del
- * rango real 0-100 en que se normalizan fisicas/cognitivas/consolidado
- * (ver normalizarValor() y calcularConsolidado() en modelo.js, que
- * siempre hacen clamp(..., 0, 100)).
+ * numericos internos: realesF/realesC (valores crudos, cada uno
+ * contra SU PROPIO rango real via validarVariable) y
+ * fisicas/cognitivas/consolidado (valores ya normalizados, que por
+ * definicion matematica de normalizarValor() SIEMPRE caen en 0-100
+ * — validar eso como 0-100 no es pereza, es lo correcto para esa
+ * capa especifica, distinta de los valores crudos).
  */
 export function validarValoresAnalisis(payload) {
-  for (const id of IDS_FISICAS) {
-    const v = payload.fisicas[id];
-    if (!esNumeroValido(v)) {
-      return { ok: false, error: `El valor fisico "${id}" es invalido (debe ser un numero finito).` };
-    }
-    if (v < 0 || v > 100) {
-      return { ok: false, error: `El valor fisico "${id}" esta fuera del rango normalizado valido (0-100).` };
-    }
-  }
-
-  for (const id of IDS_COGNITIVAS) {
-    const v = payload.cognitivas[id];
-    if (!esNumeroValido(v)) {
-      return { ok: false, error: `El valor cognitivo "${id}" es invalido (debe ser un numero finito).` };
-    }
-    if (v < 0 || v > 100) {
-      return { ok: false, error: `El valor cognitivo "${id}" esta fuera del rango normalizado valido (0-100).` };
+  // Blindaje defensivo: aunque en resultados.js esta funcion solo se
+  // llama despues de validarPayloadAnalisis (que ya garantiza estos
+  // campos), no debe lanzar una excepcion no controlada si alguna
+  // vez se invoca de forma aislada — debe devolver un error claro.
+  const camposRequeridos = ['realesF', 'realesC', 'fisicas', 'cognitivas', 'consolidado', 'corporales'];
+  for (const campo of camposRequeridos) {
+    if (!esObjetoPlano(payload?.[campo])) {
+      return { ok: false, error: `Falta o es invalido el campo "${campo}" del analisis.` };
     }
   }
 
-  for (const id of IDS_FISICAS) {
-    const entrada = payload.consolidado[id];
+  // 1. Valores CRUDOS reales — cada uno contra su propio rango real
+  //    (kg, segundos, metros, ms, % — nunca 0-100 generico).
+  for (const def of DEFINICIONES_FISICAS) {
+    const resultado = validarVariable(payload.realesF[def.id], def);
+    if (!resultado.ok) return resultado;
+  }
+  for (const def of DEFINICIONES_COGNITIVAS) {
+    const resultado = validarVariable(payload.realesC[def.id], def);
+    if (!resultado.ok) return resultado;
+  }
+
+  // 2. Valores NORMALIZADOS (0-100 por construccion matematica de
+  //    normalizarValor en modelo.js — clamp(...,0,100)).
+  for (const def of DEFINICIONES_FISICAS) {
+    const v = payload.fisicas[def.id];
+    if (!esNumeroValido(v)) {
+      return { ok: false, error: `El valor fisico normalizado "${def.id}" es invalido (debe ser un numero finito).` };
+    }
+    if (v < 0 || v > 100) {
+      return { ok: false, error: `El valor fisico normalizado "${def.id}" esta fuera del rango 0-100.` };
+    }
+  }
+  for (const def of DEFINICIONES_COGNITIVAS) {
+    const v = payload.cognitivas[def.id];
+    if (!esNumeroValido(v)) {
+      return { ok: false, error: `El valor cognitivo normalizado "${def.id}" es invalido (debe ser un numero finito).` };
+    }
+    if (v < 0 || v > 100) {
+      return { ok: false, error: `El valor cognitivo normalizado "${def.id}" esta fuera del rango 0-100.` };
+    }
+  }
+
+  // 3. Consolidado (base/ajCog/ajCorp/total por cada variable fisica)
+  for (const def of DEFINICIONES_FISICAS) {
+    const entrada = payload.consolidado[def.id];
     if (!esObjetoPlano(entrada)) {
-      return { ok: false, error: `El consolidado de "${id}" es invalido (debe ser un objeto).` };
+      return { ok: false, error: `El consolidado de "${def.id}" es invalido (debe ser un objeto).` };
     }
     for (const campo of ['base', 'ajCog', 'ajCorp', 'total']) {
       if (!esNumeroValido(entrada[campo])) {
-        return { ok: false, error: `El campo "${campo}" del consolidado de "${id}" es invalido (debe ser un numero finito).` };
+        return { ok: false, error: `El campo "${campo}" del consolidado de "${def.id}" es invalido (debe ser un numero finito).` };
       }
     }
     if (entrada.total < 0 || entrada.total > 100) {
-      return { ok: false, error: `El total consolidado de "${id}" esta fuera del rango valido (0-100).` };
+      return { ok: false, error: `El total consolidado de "${def.id}" esta fuera del rango valido (0-100).` };
     }
   }
 
-  // Corporales: opcionales. Si vienen, deben ser numeros coherentes
-  // (o cadena vacia / null / undefined, que significa "no diligenciado").
+  // 4. Corporales: opcionales, sin rango metodologico definido — solo
+  //    coherencia fisica basica. Si vienen vacios/null, se omiten.
   for (const [campo, rango] of Object.entries(RANGOS_CORPORALES)) {
     const raw = payload.corporales[campo];
     if (raw === '' || raw === null || raw === undefined) continue;
