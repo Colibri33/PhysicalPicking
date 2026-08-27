@@ -52,7 +52,7 @@ arcoRouter.get('/exportar', requireAuth, async (req, res) => {
     ip_origen: req.ip,
   });
 
-  res.setHeader('Content-Disposition', 'attachment; filename="mis-datos-dermaanalyzer.json"');
+  res.setHeader('Content-Disposition', 'attachment; filename="mis-datos-physicalpicking.json"');
   res.json({
     generadoEn: new Date().toISOString(),
     perfil,

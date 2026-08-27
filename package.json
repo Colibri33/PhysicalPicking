@@ -1,8 +1,8 @@
 {
-  "name": "dermaanalyzer-backend",
+  "name": "physicalpicking-backend",
   "version": "1.0.0",
   "private": true,
-  "description": "Backend de DermaAnalyzer Pro: cifrado de datos sensibles, consentimiento Habeas Data y derechos ARCO sobre Supabase.",
+  "description": "Backend de PhysicalPicking: sistema de recomendacion deportiva multivariable. Cifrado de datos sensibles, consentimiento Habeas Data y derechos ARCO sobre Supabase.",
   "type": "module",
   "main": "src/server.js",
   "scripts": {

@@ -11,6 +11,7 @@ import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { supabaseAdmin } from '../supabaseAdmin.js';
 import { cifrarJSON, descifrarJSON } from '../utils/crypto.js';
+import { validarParticipante, validarPayloadAnalisis } from '../utils/validacion.js';
 
 export const resultadosRouter = Router();
 
@@ -28,11 +29,15 @@ async function tieneConsentimientoVigente(usuarioId) {
 resultadosRouter.post('/', requireAuth, async (req, res) => {
   const { participante, payload } = req.body || {};
 
-  if (!participante?.nombre?.trim() || !participante?.edad) {
-    return res.status(400).json({ error: 'Faltan datos del participante.' });
+  const validacionParticipante = validarParticipante(participante);
+  if (!validacionParticipante.ok) {
+    return res.status(400).json({ error: validacionParticipante.error });
   }
-  if (!payload) {
-    return res.status(400).json({ error: 'Falta el contenido del resultado.' });
+  const { nombre, edad } = validacionParticipante;
+
+  const validacionPayload = validarPayloadAnalisis(payload);
+  if (!validacionPayload.ok) {
+    return res.status(400).json({ error: validacionPayload.error });
   }
 
   const consentido = await tieneConsentimientoVigente(req.usuario.id);
@@ -48,9 +53,9 @@ resultadosRouter.post('/', requireAuth, async (req, res) => {
     .from('resultados_test')
     .insert({
       usuario_id: req.usuario.id,
-      participante_nombre: participante.nombre.trim(),
-      participante_edad: Number(participante.edad),
-      es_menor_edad: Number(participante.edad) < 18,
+      participante_nombre: nombre,
+      participante_edad: edad,
+      es_menor_edad: edad < 18,
       datos_cifrados: datosCifrados,
       iv,
       auth_tag: authTag,

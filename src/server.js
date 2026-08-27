@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════
    server.js
-   API de DermaAnalyzer Pro. Todo el tráfico va sobre HTTPS en
+   API de PhysicalPicking. Todo el tráfico va sobre HTTPS en
    producción (Render lo provee automáticamente). CORS restringido
    a los dominios del frontend. Rate limiting básico contra fuerza
    bruta / scraping.
@@ -45,4 +45,4 @@ app.use((err, _req, res, _next) => {
 });
 
 const port = process.env.PORT || 8080;
-app.listen(port, () => console.log(`DermaAnalyzer backend escuchando en :${port}`));
+app.listen(port, () => console.log(`PhysicalPicking backend escuchando en :${port}`));
