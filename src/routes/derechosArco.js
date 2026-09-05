@@ -1,17 +1,17 @@
-/* ═══════════════════════════════════════════════════════════════
+/* 
    routes/derechosArco.js
    Implementa los derechos ARCO (Acceso, Rectificación, Cancelación
    -supresión-, Oposición) exigidos por la Ley 1581/2012 y su
-   Decreto reglamentario 1377/2013:
+   Decreto reglamentario 1377/2013 y funciona asi:
      - GET /arco/exportar  → derecho de ACCESO: descarga todos los
-       datos que tenemos del titular, en un JSON legible.
+       datos que tenemos del titular, en un JSON legible o Pdf.
      - DELETE /arco/cuenta → derecho de CANCELACIÓN/SUPRESIÓN:
        borra la cuenta y, en cascada, todos sus datos.
    La RECTIFICACIÓN se cubre con los endpoints normales de edición
    de perfil/resultados; la OPOSICIÓN se cubre dejando de tratar
    datos del usuario (cerrando/anonimizando la cuenta) — mismo
    endpoint de cancelación.
-   ═══════════════════════════════════════════════════════════════ */
+   */
 
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
@@ -28,7 +28,7 @@ arcoRouter.get('/exportar', requireAuth, async (req, res) => {
     supabaseAdmin.from('consentimientos').select('*').eq('usuario_id', usuarioId),
     supabaseAdmin
       .from('resultados_test')
-      .select('id, participante_nombre, participante_edad, es_menor_edad, datos_cifrados, iv, auth_tag, creado_en')
+      .select('id, participante_nombre, participante_edad, datos_cifrados, iv, auth_tag, creado_en')
       .eq('usuario_id', usuarioId),
   ]);
 
@@ -64,7 +64,7 @@ arcoRouter.get('/exportar', requireAuth, async (req, res) => {
 arcoRouter.delete('/cuenta', requireAuth, async (req, res) => {
   const usuarioId = req.usuario.id;
 
-  // Auditoría ANTES de borrar (después ya no habrá usuario_id que enlazar)
+  // Auditoría ANTES de borrar (después ya no habrá usuario_id para poderlo enlazar)
   await supabaseAdmin.from('auditoria_accesos').insert({
     usuario_id: usuarioId,
     accion: 'eliminar_cuenta',
@@ -72,7 +72,7 @@ arcoRouter.delete('/cuenta', requireAuth, async (req, res) => {
   });
 
   // Borra el usuario de auth.users; perfiles, consentimientos y
-  // resultados_test caen en cascada por las FK definidas en schema.sql.
+  // resultados_test caen en cascada por las FK(foregeinkeis) definidas en schema.sql.
   const { error } = await supabaseAdmin.auth.admin.deleteUser(usuarioId);
   if (error) return res.status(500).json({ error: 'No se pudo eliminar la cuenta.' });
 

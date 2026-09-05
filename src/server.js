@@ -1,10 +1,10 @@
-/* ═══════════════════════════════════════════════════════════════
+/* 
    server.js
    API de PhysicalPicking. Todo el tráfico va sobre HTTPS en
    producción (Render lo provee automáticamente). CORS restringido
    a los dominios del frontend. Rate limiting básico contra fuerza
    bruta / scraping.
-   ═══════════════════════════════════════════════════════════════ */
+*/
 
 import 'dotenv/config';
 import express from 'express';

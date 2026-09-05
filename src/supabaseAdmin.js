@@ -1,10 +1,10 @@
-/* ═══════════════════════════════════════════════════════════════
+/*
    supabaseAdmin.js
    Cliente de Supabase con la SERVICE ROLE KEY. Este cliente puede
    saltarse RLS, por lo que SOLO se usa dentro del backend, nunca
    se expone al navegador. Cada endpoint valida manualmente que el
    usuario autenticado solo pueda tocar sus propios datos.
-   ═══════════════════════════════════════════════════════════════ */
+*/
 
 import { createClient } from '@supabase/supabase-js';
 

@@ -1,4 +1,4 @@
-/* ═══════════════════════════════════════════════════════════════
+/* 
    utils/crypto.js
    Cifrado simétrico AES-256-GCM para datos sensibles (resultados
    de test físicos/cognitivos) antes de guardarlos en Postgres.
@@ -9,11 +9,11 @@
      base de datos (backup filtrado, credencial comprometida, admin
      malicioso), los valores de mediciones siguen siendo ilegibles
      sin la FIELD_ENCRYPTION_KEY, que NUNCA vive en la base de datos
-     ni en el frontend — solo en el entorno del backend.
+     ni en el frontend, solo en el entorno del backend.
    - Es una buena práctica reconocida para "datos sensibles" bajo
-     el Art. 5 de la Ley 1581/2012 (aquí, datos de salud/condición
-     física relacionados con menores en algunos casos).
-   ═══════════════════════════════════════════════════════════════ */
+     el Art. 5 de la Ley 1581/2012 (aquí, datos de condición física
+     de los participantes evaluados).
+   */
 
 import crypto from 'node:crypto';
 
@@ -31,14 +31,14 @@ function obtenerClave() {
 }
 
 /*
- * bufferABytea / byteaABuffer — conversion correcta entre Buffer de
+ * bufferABytea / byteaABuffer: conversion correcta entre Buffer de
  * Node y el formato que Postgres/PostgREST esperan para columnas
  * `bytea` quando se viaja por HTTP como JSON.
  *
  * BUG REAL ENCONTRADO Y CORREGIDO: supabase-js envia el body como
  * JSON. Si se le pasa un Buffer de Node directamente, JSON.stringify
  * invoca Buffer.prototype.toJSON() y lo serializa como
- * {"type":"Buffer","data":[...]} — un objeto anidado, NO el string
+ * {"type":"Buffer","data":[...]}, un objeto anidado, NO el string
  * hexadecimal ("\x1a2b3c...") que Postgres entiende para bytea. El
  * resultado es que el insert falla o guarda datos corruptos que
  * luego no se pueden descifrar (por eso el historial aparecia con
@@ -61,7 +61,7 @@ export function byteaABuffer(valor) {
 }
 
 /**
- * cifrarJSON — cifra un objeto JS y devuelve las partes necesarias
+ * cifrarJSON: cifra un objeto JS y devuelve las partes necesarias
  * para guardarlo en columnas `bytea` separadas (datos, iv, tag),
  * ya codificadas como strings hex listos para insertar via Supabase.
  */
@@ -82,7 +82,7 @@ export function cifrarJSON(objeto) {
 }
 
 /**
- * descifrarJSON — reconstruye el objeto original a partir de las
+ * descifrarJSON: reconstruye el objeto original a partir de las
  * columnas leidas de Supabase (que llegan como strings hex "\x...",
  * o como Buffer si se invoca localmente con datos ya binarios).
  */

@@ -1,11 +1,17 @@
-/* ═══════════════════════════════════════════════════════════════
+/*
    routes/consentimiento.js
    Registra la autorización de tratamiento de datos personales
    (Habeas Data) del usuario, con evidencia (versión de política,
-   IP, user-agent, fecha). Es un registro inmutable: nunca se
+   IP, user-agent, fecha). Es un registro que nunca se
    actualiza ni se borra directamente (solo cae en cascada si el
    usuario ejerce su derecho de supresión / elimina su cuenta).
-   ═══════════════════════════════════════════════════════════════ */
+ */
+      // cambio
+      // PhysicalPicking es exclusivo para adultos de 18 a 30 años
+      // (impuesto por validarParticipante en cada analisis); no existe
+      // autorizacion de terceros/acudientes. Este valor se mantiene en
+      // `true` por compatibilidad con la columna NOT NULL existente en
+      // Supabase ya que el prototio anterior contemplaba aplicación en menores de edad.
 
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
@@ -14,23 +20,11 @@ import { supabaseAdmin } from '../supabaseAdmin.js';
 export const consentimientoRouter = Router();
 
 consentimientoRouter.post('/', requireAuth, async (req, res) => {
-  const {
-    aceptoTratamiento,
-    aceptoDatosSensibles,
-    esMayorDeEdad,
-    nombreAcudiente,
-    documentoAcudiente,
-  } = req.body || {};
+  const { aceptoTratamiento, aceptoDatosSensibles } = req.body || {};
 
   if (aceptoTratamiento !== true || aceptoDatosSensibles !== true) {
     return res.status(400).json({
       error: 'Debes aceptar la autorización de tratamiento de datos y de datos sensibles para continuar.',
-    });
-  }
-
-  if (esMayorDeEdad === false && (!nombreAcudiente?.trim() || !documentoAcudiente?.trim())) {
-    return res.status(400).json({
-      error: 'Para menores de edad se requiere el nombre y documento del padre, madre o acudiente.',
     });
   }
 
@@ -41,9 +35,7 @@ consentimientoRouter.post('/', requireAuth, async (req, res) => {
       version_politica: process.env.POLITICA_VERSION || 'v1.0',
       acepto_tratamiento: true,
       acepto_datos_sensibles: true,
-      es_mayor_de_edad: esMayorDeEdad !== false,
-      nombre_acudiente: nombreAcudiente || null,
-      documento_acudiente: documentoAcudiente || null,
+      es_mayor_de_edad: true,
       ip_origen: req.ip,
       user_agent: req.headers['user-agent'] || null,
     })
@@ -61,7 +53,7 @@ consentimientoRouter.post('/', requireAuth, async (req, res) => {
   res.status(201).json({ ok: true, consentimiento: data });
 });
 
-// Consultar si el usuario ya tiene un consentimiento vigente
+// Consultar si el usuario ya tiene un consentimiento vigente o actvo
 consentimientoRouter.get('/vigente', requireAuth, async (req, res) => {
   const { data, error } = await supabaseAdmin
     .from('consentimientos')

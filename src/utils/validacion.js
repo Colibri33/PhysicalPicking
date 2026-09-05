@@ -1,4 +1,4 @@
-/* ═══════════════════════════════════════════════════════════════
+/*
    utils/validacion.js
    Validacion defensiva de los datos que llegan al endpoint de
    resultados. Basada en la estructura y los rangos REALES definidos
@@ -22,9 +22,9 @@
      perfilesDeportivos: {...}, rankingDeportes: [...], interpretacion: {...}
    }
 
-   ─────────────────────────────────────────────────────────────
-   FUENTE UNICA DE VERDAD — NOTA IMPORTANTE SOBRE ARQUITECTURA:
-   ─────────────────────────────────────────────────────────────
+   
+  FUENTE UNICA DE VERDAD: NOTA IMPORTANTE SOBRE ARQUITECTURA:
+  
    Frontend y backend son dos repositorios/despliegues Node
    independientes (Render Static Site vs Render Web Service), sin
    build compartido ni paquete npm comun entre ellos. Por lo tanto
@@ -38,14 +38,16 @@
    Lo que sigue en DEFINICIONES_FISICAS / DEFINICIONES_COGNITIVAS es
    una COPIA ESPEJO manual de esos mismos valores, mantenida a mano.
    Si cambias un rango en modelo.js, DEBES actualizar tambien aqui,
-   o backend y frontend quedaran validando cosas distintas — este
+   o backend y frontend quedaran validando cosas distintas, este
    riesgo de desincronizacion es una limitacion real y conocida de
    esta arquitectura de dos repos separados, no un problema resuelto.
    ═══════════════════════════════════════════════════════════════ */
 
 const NOMBRE_MAX_LEN = 120;
-const EDAD_MIN = 1;
-const EDAD_MAX = 120;
+// PhysicalPicking evalua exclusivamente participantes adultos entre
+// 18 y 30 años (poblacion objetivo del proyecto).
+const EDAD_MIN = 18;
+const EDAD_MAX = 30;
 
 // Copia espejo exacta de VARS_FISICAS en frontend/src/logic/modelo.js
 export const DEFINICIONES_FISICAS = [
@@ -89,7 +91,7 @@ function esNumeroValido(n) {
 }
 
 /**
- * validarVariable — validador GENERICO de un valor contra la
+ * validarVariable: validador GENERICO de un valor contra la
  * definicion de una variable (min/max/paso/unidad). Es la funcion
  * base que usan tanto la validacion de valores crudos (realesF/
  * realesC) como, en principio, cualquier otra variable con rango
@@ -122,7 +124,7 @@ export function validarVariable(valor, definicion) {
 }
 
 /**
- * validarParticipante — valida el objeto participante recibido
+ * validarParticipante: valida el objeto participante recibido
  * en el body de la peticion (req.body.participante).
  */
 export function validarParticipante(participante) {
@@ -156,7 +158,7 @@ export function validarParticipante(participante) {
 }
 
 /**
- * validarPayloadAnalisis — valida la ESTRUCTURA general del
+ * validarPayloadAnalisis: valida la ESTRUCTURA general del
  * "registro" de analisis (tipos y forma), sin entrar todavia en el
  * detalle de cada numero. Ver validarValoresAnalisis() para eso.
  */
@@ -189,12 +191,12 @@ export function validarPayloadAnalisis(payload) {
 }
 
 /**
- * validarValoresAnalisis — validacion PROFUNDA de los valores
+ * validarValoresAnalisis: validacion PROFUNDA de los valores
  * numericos internos: realesF/realesC (valores crudos, cada uno
  * contra SU PROPIO rango real via validarVariable) y
  * fisicas/cognitivas/consolidado (valores ya normalizados, que por
  * definicion matematica de normalizarValor() SIEMPRE caen en 0-100
- * — validar eso como 0-100 no es pereza, es lo correcto para esa
+ * validar eso como 0-100 no es pereza, es lo correcto para esa
  * capa especifica, distinta de los valores crudos).
  */
 export function validarValoresAnalisis(payload) {
