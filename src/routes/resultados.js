@@ -1,7 +1,7 @@
 /* 
    routes/resultados.js
    Guarda y lee el historial de resultados de test. El contenido
-   sensible (mediciones físicas/cognitivas y el resultado calculado)
+   sensible (mediciones físicas/antropométricas, cuestionarios y el resultado calculado)
    se cifra con AES-256-GCM antes de tocar la base de datos, y se
    descifra solo en memoria del backend al leerlo, para el usuario
    dueño del registro.
@@ -13,6 +13,7 @@ import { supabaseAdmin } from '../supabaseAdmin.js';
 import { cifrarJSON, descifrarJSON } from '../utils/crypto.js';
 import { validarParticipante, validarPayloadAnalisis, validarValoresAnalisis } from '../utils/validacion.js';
 import { generarPdfInforme } from '../utils/pdf.js';
+import { migrarRegistroLegado } from '../utils/registroLegado.js';
 
 export const resultadosRouter = Router();
 
@@ -28,7 +29,9 @@ async function tieneConsentimientoVigente(usuarioId) {
 }
 
 resultadosRouter.post('/', requireAuth, async (req, res) => {
-  const { participante, payload } = req.body || {};
+  const { participante, payload: payloadRecibido } = req.body || {};
+  // Registros anteriores a v6 (cognitivo/"corporales") se adaptan antes de validar.
+  const payload = migrarRegistroLegado(payloadRecibido);
 
   const validacionParticipante = validarParticipante(participante);
   if (!validacionParticipante.ok) {
@@ -129,11 +132,11 @@ resultadosRouter.get('/', requireAuth, async (req, res) => {
 
   const historial = data.map(fila => {
     try {
-      const payload = descifrarJSON({
+      const payload = migrarRegistroLegado(descifrarJSON({
         datosCifrados: fila.datos_cifrados,
         iv: fila.iv,
         authTag: fila.auth_tag,
-      });
+      }));
       return {
         id: fila.id,
         participante: { nombre: fila.participante_nombre, edad: fila.participante_edad },
@@ -160,7 +163,9 @@ resultadosRouter.get('/', requireAuth, async (req, res) => {
 });
 
 resultadosRouter.put('/:id', requireAuth, async (req, res) => {
-  const { participante, payload } = req.body || {};
+  const { participante, payload: payloadRecibido } = req.body || {};
+  // Registros anteriores a v6 (cognitivo/"corporales") se adaptan antes de validar.
+  const payload = migrarRegistroLegado(payloadRecibido);
 
   const validacionParticipante = validarParticipante(participante);
   if (!validacionParticipante.ok) {
@@ -253,7 +258,7 @@ resultadosRouter.get('/:id/pdf', requireAuth, async (req, res) => {
 
   let payload;
   try {
-    payload = descifrarJSON({ datosCifrados: fila.datos_cifrados, iv: fila.iv, authTag: fila.auth_tag });
+    payload = migrarRegistroLegado(descifrarJSON({ datosCifrados: fila.datos_cifrados, iv: fila.iv, authTag: fila.auth_tag }));
   } catch (e) {
     console.error(`No se pudo descifrar el resultado ${fila.id} para PDF:`, e.message);
     return res.status(500).json({ error: 'No se pudo leer este registro.' });
@@ -282,7 +287,9 @@ resultadosRouter.get('/:id/pdf', requireAuth, async (req, res) => {
  * limitado por el rate limiter global para evitar abuso.
  */
 resultadosRouter.post('/pdf', async (req, res) => {
-  const { participante, payload } = req.body || {};
+  const { participante, payload: payloadRecibido } = req.body || {};
+  // Registros anteriores a v6 (cognitivo/"corporales") se adaptan antes de validar.
+  const payload = migrarRegistroLegado(payloadRecibido);
 
   const validacionParticipante = validarParticipante(participante);
   if (!validacionParticipante.ok) {

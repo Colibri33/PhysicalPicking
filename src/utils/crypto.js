@@ -1,7 +1,7 @@
 /* 
    utils/crypto.js
    Cifrado simétrico AES-256-GCM para datos sensibles (resultados
-   de test físicos/cognitivos) antes de guardarlos en Postgres.
+   de test físicos/antropométricos y cuestionarios) antes de guardarlos en Postgres.
 
    Por qué cifrado a nivel de campo, además del cifrado que ya da
    Supabase (disco cifrado + TLS en tránsito):
