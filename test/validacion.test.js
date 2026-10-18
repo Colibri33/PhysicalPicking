@@ -41,13 +41,14 @@ test('registro legado se adapta y valida', () => {
   assert.equal(migrado._legado.ajCog.fuerza, 1.5);
 });
 
-test('leger: admite medios niveles (3.5); rechaza 3.7 y fuera de rango', () => {
+test('leger: solo enteros 1-21 (nivel máximo alcanzado); vacío se permite', () => {
   const base = nuevo();
-  assert.equal(validarPayloadAnalisis({ ...base, leger: { palier: 3.5 } }).ok, true);
-  assert.equal(validarPayloadAnalisis({ ...base, leger: { palier: '3.5' } }).ok, true);
-  assert.equal(validarPayloadAnalisis({ ...base, leger: { palier: 3.7 } }).ok, false);
-  assert.equal(validarPayloadAnalisis({ ...base, leger: { palier: 22 } }).ok, false);
-  assert.equal(validarPayloadAnalisis({ ...base, leger: { palier: '' } }).ok, true);
+  for (const ok of [1, 8, '12', 21, '']) {
+    assert.equal(validarPayloadAnalisis({ ...base, leger: { palier: ok } }).ok, true, `${ok} debe ser valido`);
+  }
+  for (const mal of [0, 3.5, '3.5', 3.6, 3.7, 22, -1, 'x']) {
+    assert.equal(validarPayloadAnalisis({ ...base, leger: { palier: mal } }).ok, false, `${mal} debe rechazarse`);
+  }
 });
 
 test('evaluacion sin version de flujo se rechaza', () => {

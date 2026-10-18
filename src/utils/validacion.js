@@ -54,12 +54,12 @@ const EDAD_MIN = 18;
 const EDAD_MAX = 30;
 
 // Copia espejo exacta de VARS_FISICAS en frontend/src/logic/modelo.js
-// (fuerza prensil como SUMA 0-200, resistencia aeróbica como nivel Léger 0-21
-// con medios niveles). Ver esNivelLegerValido() en el frontend.
+// (fuerza prensil como SUMA 0-200, resistencia aeróbica como nivel máximo
+// de Léger, entero 1-21). Ver esNivelLegerValido() en el frontend.
 export const DEFINICIONES_FISICAS = [
   { id: 'fuerza',       min: 20,   max: 200,  paso: 1,   unidad: 'kg',           direccion: 'mayor_mejor' },
   { id: 'fuerzaExp',    min: 5,    max: 65,   paso: 1,   unidad: 'cm',           direccion: 'mayor_mejor' },
-  { id: 'resistencia',  min: 0,    max: 21,   paso: 0.5, unidad: 'nivel',        direccion: 'mayor_mejor' },
+  { id: 'resistencia',  min: 1,    max: 21,   paso: 1,   unidad: 'nivel',        direccion: 'mayor_mejor' },
   { id: 'flexibilidad', min: -20,  max: 30,   paso: 1,   unidad: 'cm',           direccion: 'mayor_mejor' },
   { id: 'equilibrio',   min: 0,    max: 60,   paso: 1,   unidad: 'intentos',     direccion: 'menor_mejor' },
 ];
@@ -288,10 +288,10 @@ export function validarPayloadAnalisis(payload) {
   if (payload.leger !== undefined) {
     if (!esObjetoPlano(payload.leger)) return { ok: false, error: 'El campo "leger" del analisis debe ser un objeto.' };
     const { palier } = payload.leger;
-    // Nivel Léger 0-21 con medios niveles (espejo de esNivelLegerValido).
+    // Nivel máximo de Léger: entero 1-21 (espejo de esNivelLegerValido).
     const n = Number(palier);
-    if (palier !== undefined && palier !== '' && (!Number.isFinite(n) || n < 0 || n > 21 || !Number.isInteger(n * 2))) {
-      return { ok: false, error: 'El campo "leger.palier" debe estar entre 0 y 21 (admite medios niveles como 3.5).' };
+    if (palier !== undefined && palier !== '' && (!Number.isFinite(n) || n < 1 || n > 21 || !Number.isInteger(n))) {
+      return { ok: false, error: 'El campo "leger.palier" debe ser un número entero entre 1 y 21 (nivel máximo alcanzado).' };
     }
   }
 

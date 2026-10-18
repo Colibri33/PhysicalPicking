@@ -18,6 +18,22 @@ import PDFDocument from 'pdfkit';
 const AZUL = '#1E3A5F';
 const GRIS = '#6B7280';
 
+const ETIQUETA_CAPACIDAD = {
+  fuerza: 'fuerza', fuerza_explosiva: 'fuerza explosiva', vo2max: 'resistencia aeróbica',
+  flexibilidad: 'flexibilidad', equilibrio: 'equilibrio',
+};
+
+// Motivos por los que una familia no es recomendable (registros antiguos: solo carencias).
+function textoNoFirme(f) {
+  const motivos = Array.isArray(f.motivosNoFirme)
+    ? f.motivosNoFirme
+    : (f.carencias || []).map(c => ({ tipo: 'sin_dato', capacidad: c.capacidad, demanda: c.demanda }));
+  if (motivos.length === 0) return 'demanda definitoria sin evaluar';
+  return motivos.map(m => (m.tipo === 'brecha_severa'
+    ? `${ETIQUETA_CAPACIDAD[m.capacidad] ?? m.capacidad} ${m.nivel} frente a demanda ${m.demanda}`
+    : `${ETIQUETA_CAPACIDAD[m.capacidad] ?? m.capacidad} sin dato (demanda ${m.demanda})`)).join('; ');
+}
+
 function formatearFecha(iso) {
   try {
     return new Date(iso).toLocaleString('es-CO', { dateStyle: 'long', timeStyle: 'short' });
@@ -76,7 +92,7 @@ export function generarPdfInforme(payload, res) {
   //Seguridad (PAR-Q+): siempre antes de la recomendacion
   const seguridad = payload.evaluacion?.informe?.seguridad;
   if (seguridad) {
-    seccionTitulo(doc, 'Seguridad (PAR-Q+)');
+    seccionTitulo(doc, 'Seguridad y alertas (PAR-Q+ y antecedentes)');
     doc.font('Helvetica').fontSize(9.5).fillColor('#1F2937')
       .text(`Prueba máxima (Léger): ${seguridad.pruebaMaxima?.autorizada ? 'autorizada' : 'no autorizada automáticamente'}. ${seguridad.pruebaMaxima?.motivo || ''}`);
     (seguridad.alertas || []).forEach(a => doc.text(`• ${a.mensaje}`, { indent: 8 }));
@@ -102,6 +118,11 @@ export function generarPdfInforme(payload, res) {
       doc.text(`Lesión previa: sí${zona ? ` (${zona})` : ''}`
         + `${ant.fechaAprox ? `, fecha aprox.: ${ant.fechaAprox}` : ''}`
         + `${ant.tratamiento === true ? ', con tratamiento' : ant.tratamiento === false ? ', sin tratamiento' : ''}.`);
+      // R-SEG-04: registros anteriores a la regla no traen la alerta en el flujo.
+      const yaAlertada = (payload.evaluacion?.informe?.seguridad?.alertas || []).some(a => a.codigo === 'ANTECEDENTE_LESION');
+      if (!yaAlertada) {
+        doc.text('Se recomienda un periodo de adaptación y recuperación previa antes de iniciar nuevamente con algún deporte.');
+      }
     } else {
       doc.text('Lesión previa: no declarada.');
     }
@@ -150,14 +171,37 @@ export function generarPdfInforme(payload, res) {
   const rankingMotor = payload.evaluacion?.etapas?.ranking;
   const familiasMotor = rankingMotor?.familias;
   if (Array.isArray(familiasMotor) && familiasMotor.length > 0) {
-    const recomendada = rankingMotor?.recomendada ?? familiasMotor[0];
+    // R-DEC-03: si ninguna familia es firme no se presenta un deporte
+    // (registros antiguos sin `sinFamiliaCompatible` conservan su forma).
+    const recomendada = rankingMotor?.recomendada ?? (rankingMotor?.sinFamiliaCompatible ? null : familiasMotor[0]);
+    const plan = payload.evaluacion?.etapas?.planAdaptacion;
     seccionTitulo(doc, 'Recomendación deportiva (DecisionEngine)');
-    doc.font('Helvetica').fontSize(9.5).fillColor('#1F2937')
-      .text(`Mayor compatibilidad firme: ${recomendada?.nombre ?? recomendada?.id ?? '—'}${recomendada?.porcentaje != null ? ` — ${recomendada.porcentaje}% de compatibilidad` : ''}.`);
+    doc.font('Helvetica').fontSize(9.5).fillColor('#1F2937');
+    if (recomendada) {
+      doc.text(`Recomendación firme: ${recomendada?.nombre ?? recomendada?.id ?? '—'}${recomendada?.porcentaje != null ? ` — ${recomendada.porcentaje}% de compatibilidad` : ''}.`);
+    } else if (plan?.estado === 3) {
+      doc.font('Helvetica-Bold').fillColor(AZUL).text(`Estado ${plan.estado}: ${plan.nombre}`);
+      doc.font('Helvetica').fillColor('#1F2937').text(plan.motivo || '');
+      if (Array.isArray(plan.prioridades) && plan.prioridades.length > 0) {
+        doc.text(`Capacidades a priorizar: ${plan.prioridades.map(p => `${ETIQUETA_CAPACIDAD[p.capacidad] ?? p.capacidad} (${p.nivel})`).join(', ')}.`);
+      }
+      [...(plan.pautasGenerales || []), ...(plan.pautasComponentes || [])].forEach(p => {
+        doc.text(`• ${p.titulo}: ${p.texto} (${p.referencia})`, { indent: 8 });
+      });
+      if (plan.fuente?.referencia) {
+        doc.font('Helvetica').fontSize(8.5).fillColor(GRIS).text(`Fuente: ${plan.fuente.referencia}`);
+        doc.fontSize(9.5).fillColor('#1F2937');
+      }
+    } else if (plan?.tipo === 'datos_insuficientes') {
+      doc.text(`${plan.motivo || 'Faltan datos para recomendar.'} Datos faltantes: ${(plan.faltantes || []).map(c => ETIQUETA_CAPACIDAD[c] ?? c).join(', ')}.`);
+    } else {
+      doc.text('Ninguna familia deportiva puede presentarse como recomendación firme con el perfil actual.');
+    }
+    doc.moveDown(0.3);
     familiasMotor.slice(0, 5).forEach((f, i) => {
       const pct = f.porcentaje ?? '—';
       doc.font('Helvetica-Bold').fontSize(10).fillColor(AZUL)
-        .text(`${i + 1}. ${f.nombre ?? f.id} — ${pct}${f.porcentaje != null ? '% de compatibilidad' : ''}${f.firme === false ? ' (provisional: demanda definitoria sin evaluar)' : ''}`);
+        .text(`${i + 1}. ${f.nombre ?? f.id} — ${pct}${f.porcentaje != null ? '% de compatibilidad' : ''}${f.firme === false ? ` (no recomendable: ${textoNoFirme(f)})` : ''}`);
       const rel = (f.brechas ?? []).filter(b => b.relevanteMitchell);
       if (rel.length > 0) {
         doc.font('Helvetica').fontSize(9).fillColor(GRIS)
