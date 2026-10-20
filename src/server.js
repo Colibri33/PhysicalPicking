@@ -15,6 +15,7 @@ import rateLimit from 'express-rate-limit';
 import { consentimientoRouter } from './routes/consentimiento.js';
 import { resultadosRouter } from './routes/resultados.js';
 import { arcoRouter } from './routes/derechosArco.js';
+import { iaRouter } from './routes/ia.js';
 
 const app = express();
 
@@ -37,6 +38,7 @@ app.get('/health', (_req, res) => res.json({ ok: true }));
 app.use('/consentimiento', consentimientoRouter);
 app.use('/resultados', resultadosRouter);
 app.use('/arco', arcoRouter);
+app.use('/ia', iaRouter);
 
 // Manejador de errores genérico (nunca exponer detalles internos al cliente)
 app.use((err, _req, res, _next) => {
