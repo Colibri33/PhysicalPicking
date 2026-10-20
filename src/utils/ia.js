@@ -41,15 +41,17 @@ export async function llamarDeepSeek(messages, { fetchImpl = fetch, env = proces
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), 45_000);
   try {
+    const modelo = env.DEEPSEEK_MODEL || 'deepseek-flash';
     const cuerpo = {
-      model: env.DEEPSEEK_MODEL || 'deepseek-flash',
+      model: modelo,
       messages,
       max_tokens: maxTokens,
       temperature: 0.4,
       stream: false,
     };
-    // Respuesta rápida: sin modo "thinking" salvo que se active por entorno.
-    if (env.DEEPSEEK_THINKING !== 'enabled') cuerpo.thinking = { type: 'disabled' };
+    // Respuesta rápida: sin modo "thinking" (parámetro propio de DeepSeek;
+    // otros modelos/proveedores, p. ej. OpenCode Zen, no lo reciben).
+    if (/deepseek/i.test(modelo) && env.DEEPSEEK_THINKING !== 'enabled') cuerpo.thinking = { type: 'disabled' };
     const r = await fetchImpl(`${env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com'}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
