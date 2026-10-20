@@ -49,9 +49,9 @@ export async function llamarDeepSeek(messages, { fetchImpl = fetch, env = proces
       temperature: 0.4,
       stream: false,
     };
-    // Respuesta rápida: sin modo "thinking" (parámetro propio de DeepSeek;
-    // otros modelos/proveedores, p. ej. OpenCode Zen, no lo reciben).
-    if (/deepseek/i.test(modelo) && env.DEEPSEEK_THINKING !== 'enabled') cuerpo.thinking = { type: 'disabled' };
+    // Respuesta rápida: sin modo "thinking" (parámetro propio de la API de DeepSeek;
+    // con otra URL base —OpenRouter, OpenCode— no se envía).
+    if (!env.DEEPSEEK_BASE_URL && env.DEEPSEEK_THINKING !== 'enabled') cuerpo.thinking = { type: 'disabled' };
     const r = await fetchImpl(`${env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com'}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
