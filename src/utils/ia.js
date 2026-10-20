@@ -58,7 +58,10 @@ export async function llamarDeepSeek(messages, { fetchImpl = fetch, env = proces
       body: JSON.stringify(cuerpo),
       signal: ctl.signal,
     });
-    if (!r.ok) { const e = new Error(`DeepSeek ${r.status}`); e.codigo = 'upstream'; e.status = r.status; throw e; }
+    if (!r.ok) {
+      let detalle = '';
+      try { detalle = (await r.text()).slice(0, 300); } catch { /* sin cuerpo */ }
+      const e = new Error(`IA ${r.status} (${modelo} @ ${env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com'}): ${detalle}`); e.codigo = 'upstream'; e.status = r.status; throw e; }
     const data = await r.json();
     const texto = data?.choices?.[0]?.message?.content;
     if (typeof texto !== 'string' || !texto.trim()) { const e = new Error('Respuesta vacía'); e.codigo = 'upstream'; throw e; }
