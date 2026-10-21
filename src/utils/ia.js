@@ -35,20 +35,21 @@ export function validarMensajes(mensajes) {
   return null;
 }
 
-export async function llamarDeepSeek(messages, { fetchImpl = fetch, env = process.env, maxTokens = 700 } = {}) {
+export async function llamarDeepSeek(messages, { fetchImpl = fetch, env = process.env, maxTokens } = {}) {
   const key = env.DEEPSEEK_API_KEY;
   if (!key) { const e = new Error('IA no configurada'); e.codigo = 'sin_clave'; throw e; }
   const ctl = new AbortController();
-  const t = setTimeout(() => ctl.abort(), 45_000);
+  const t = setTimeout(() => ctl.abort(), 90_000);
   try {
     const modelo = env.DEEPSEEK_MODEL || 'deepseek-flash';
     const cuerpo = {
       model: modelo,
       messages,
-      max_tokens: maxTokens,
       temperature: 0.4,
       stream: false,
     };
+    // Sin tope de tokens salvo que se indique explícitamente.
+    if (maxTokens) cuerpo.max_tokens = maxTokens;
     // Respuesta rápida: sin modo "thinking" (parámetro propio de la API de DeepSeek;
     // con otra URL base —OpenRouter, OpenCode— no se envía).
     if (!env.DEEPSEEK_BASE_URL && env.DEEPSEEK_THINKING !== 'enabled') cuerpo.thinking = { type: 'disabled' };
@@ -74,7 +75,7 @@ export async function llamarDeepSeek(messages, { fetchImpl = fetch, env = proces
 export function mensajesInterpretacion(resumen) {
   return [
     { role: 'system', content: PROMPT_SISTEMA },
-    { role: 'user', content: `RESUMEN (JSON):\n${JSON.stringify(resumen)}\n\nRedacta la interpretación del análisis para la persona evaluada, en máximo 220 palabras, con estas secciones en texto plano (sin markdown pesado): 1) Lectura general, 2) Fortalezas, 3) Aspectos a mejorar, 4) Deporte(s) recomendado(s) y por qué, 5) Precauciones. Usa solo los datos del resumen.` },
+    { role: 'user', content: `RESUMEN (JSON):\n${JSON.stringify(resumen)}\n\nRedacta la interpretación del análisis para la persona evaluada. Responde ÚNICAMENTE con un objeto JSON válido (sin texto antes ni después, sin bloques de código) con exactamente estas claves:\n{\n  "lectura": "párrafo de 2-3 frases con la lectura general del perfil",\n  "fortalezas": ["3 a 4 frases cortas"],\n  "mejorar": ["3 a 4 frases cortas, accionables"],\n  "deportes": [{"nombre": "deporte o familia", "porcentaje": numero o null, "razon": "1-2 frases"}],\n  "precauciones": ["1 a 3 frases cortas"]\n}\nUsa solo datos del resumen; en "deportes" incluye hasta 3, empezando por el mejor compatible.` },
   ];
 }
 
