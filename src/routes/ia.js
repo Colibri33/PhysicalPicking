@@ -3,10 +3,8 @@
    límite propio por IP. El resumen NO incluye el nombre del participante. */
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import {
-  validarResumen, validarMensajes, llamarDeepSeek, mensajesInterpretacion, mensajesChat,
-  normalizarBase, BASE_POR_DEFECTO, MODELO_POR_DEFECTO,
-} from '../utils/ia.js';
+import { validarResumen, validarMensajes, mensajesInterpretacion, mensajesChat } from '../utils/ia.js';
+import { llamarDeepSeek, normalizarBase, BASE_POR_DEFECTO, MODELO_POR_DEFECTO } from '../utils/clienteIA.js';
 
 /** Traduce el código de error de la capa IA a un status HTTP y un mensaje útil. */
 export const ERRORES_IA = {
