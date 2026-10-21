@@ -1,6 +1,13 @@
-/* routes/ia.js — interpretación del análisis y chatbot (IA).
-   No requiere sesión (también funciona en modo invitado), pero tiene un
-   límite propio por IP. El resumen NO incluye el nombre del participante. */
+/**
+ * @module src/routes/ia
+ * @description Router de interpretación del análisis y chatbot de IA, con límite propio por IP.
+ *
+ * Principios SOLID aplicados:
+ *  - S (Responsabilidad única): única razón de cambio es la exposición HTTP de la IA.
+ *  - O (Abierto/Cerrado): nuevos códigos de error se añaden en ERRORES_IA sin modificar la lógica de respuesta.
+ *  - D (Inversión de dependencias): crearIaRouter inyecta `llamar` y `env`, lo que permite sustituir el proveedor en pruebas.
+ * Notas: no requiere sesión (también funciona en modo invitado). El resumen no incluye el nombre del participante.
+ */
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { validarResumen, validarMensajes, mensajesInterpretacion, mensajesChat } from '../utils/ia.js';
@@ -17,11 +24,20 @@ export const ERRORES_IA = {
   upstream: { status: 502, mensaje: 'No se pudo obtener respuesta de la IA. Intenta de nuevo.' },
 };
 
+/** Crea el router de IA con dependencias inyectables.
+ * @param {Object} [opciones] - dependencias opcionales.
+ * @param {Function} [opciones.llamar] - función que consulta al proveedor de IA.
+ * @param {Object} [opciones.env] - variables de entorno.
+ * @returns {import('express').Router} router con /estado, /interpretar y /chat. */
 export function crearIaRouter({ llamar = llamarDeepSeek, env = process.env } = {}) {
   const router = Router();
   router.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false,
     message: { error: 'Demasiadas consultas a la IA. Intenta de nuevo en unos minutos.' } }));
 
+  /** Consulta a la IA y responde con el texto, o con el status mapeado según el código de error.
+   * @param {import('express').Response} res - respuesta HTTP.
+   * @param {Array<{role: string, content: string}>} mensajes - mensajes a enviar.
+   * @returns {Promise<void>} */
   async function responder(res, mensajes) {
     try {
       const texto = await llamar(mensajes);
@@ -33,8 +49,7 @@ export function crearIaRouter({ llamar = llamarDeepSeek, env = process.env } = {
     }
   }
 
-  // Diagnóstico: qué proveedor/modelo está configurado y si responde.
-  // `?verificar=1` además hace una llamada real al proveedor (gasta cuota).
+  // Diagnóstico del proveedor y modelo configurados; `?verificar=1` hace una llamada real (consume cuota).
   router.get('/estado', async (_req, res) => {
     const base = normalizarBase(env.DEEPSEEK_BASE_URL) || BASE_POR_DEFECTO;
     const info = {

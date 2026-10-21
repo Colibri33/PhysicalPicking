@@ -1,10 +1,13 @@
-/*
-   supabaseAdmin.js
-   Cliente de Supabase con la SERVICE ROLE KEY. Este cliente puede
-   saltarse RLS, por lo que SOLO se usa dentro del backend, nunca
-   se expone al navegador. Cada endpoint valida manualmente que el
-   usuario autenticado solo pueda tocar sus propios datos.
-*/
+/**
+ * @module src/supabaseAdmin
+ * @description Instancia única del cliente Supabase con SERVICE ROLE KEY para el backend.
+ *
+ * Principios SOLID aplicados:
+ *  - S (Responsabilidad única): única razón de cambio es la configuración del cliente Supabase.
+ *  - D (Inversión de dependencias): las rutas dependen de este cliente, configurado por entorno.
+ * Notas: la clave omite RLS; nunca debe exponerse al navegador. Cada endpoint valida que el
+ * usuario autenticado solo acceda a sus propios datos.
+ */
 
 import { createClient } from '@supabase/supabase-js';
 

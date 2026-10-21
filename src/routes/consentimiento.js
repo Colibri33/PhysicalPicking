@@ -1,17 +1,13 @@
-/*
-   routes/consentimiento.js
-   Registra la autorización de tratamiento de datos personales
-   (Habeas Data) del usuario, con evidencia (versión de política,
-   IP, user-agent, fecha). Es un registro que nunca se
-   actualiza ni se borra directamente (solo cae en cascada si el
-   usuario ejerce su derecho de supresión / elimina su cuenta).
+/**
+ * @module src/routes/consentimiento
+ * @description Router que registra y consulta la autorización de tratamiento de datos personales (Habeas Data).
+ *
+ * Principios SOLID aplicados:
+ *  - S (Responsabilidad única): única razón de cambio es el ciclo de vida del consentimiento.
+ *  - D (Inversión de dependencias): usa el middleware requireAuth y el cliente supabaseAdmin importados.
+ * Notas: guarda evidencia (versión de política, IP, user-agent, fecha). El registro nunca se actualiza ni se borra
+ * directamente; solo cae en cascada si el usuario ejerce su derecho de supresión.
  */
-      // cambio
-      // PhysicalPicking es exclusivo para adultos de 18 a 30 años
-      // (impuesto por validarParticipante en cada analisis); no existe
-      // autorizacion de terceros/acudientes. Este valor se mantiene en
-      // `true` por compatibilidad con la columna NOT NULL existente en
-      // Supabase ya que el prototio anterior contemplaba aplicación en menores de edad.
 
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
@@ -35,6 +31,8 @@ consentimientoRouter.post('/', requireAuth, async (req, res) => {
       version_politica: process.env.POLITICA_VERSION || 'v1.0',
       acepto_tratamiento: true,
       acepto_datos_sensibles: true,
+      // Se mantiene en `true` por compatibilidad con la columna NOT NULL existente: la aplicación es solo para
+      // adultos de 18 a 30 años (validarParticipante) y no existe autorización de terceros ni acudientes.
       es_mayor_de_edad: true,
       ip_origen: req.ip,
       user_agent: req.headers['user-agent'] || null,
@@ -53,7 +51,6 @@ consentimientoRouter.post('/', requireAuth, async (req, res) => {
   res.status(201).json({ ok: true, consentimiento: data });
 });
 
-// Consultar si el usuario ya tiene un consentimiento vigente o actvo
 consentimientoRouter.get('/vigente', requireAuth, async (req, res) => {
   const { data, error } = await supabaseAdmin
     .from('consentimientos')

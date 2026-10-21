@@ -1,3 +1,12 @@
+/**
+ * @module test/ia.test
+ * @description Pruebas del cliente de IA, la validación de mensajes y las rutas /ia con proveedor simulado.
+ *
+ * Principios SOLID aplicados:
+ *  - S (Responsabilidad única): verifica únicamente la capa de IA (ia.js, clienteIA.js y routes/ia.js).
+ *  - D (Inversión de dependencias): inyecta fetchImpl, env y llamar simulados en lugar del proveedor real.
+ */
+
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';

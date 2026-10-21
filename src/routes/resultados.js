@@ -1,11 +1,13 @@
-/* 
-   routes/resultados.js
-   Guarda y lee el historial de resultados de test. El contenido
-   sensible (mediciones físicas/antropométricas, cuestionarios y el resultado calculado)
-   se cifra con AES-256-GCM antes de tocar la base de datos, y se
-   descifra solo en memoria del backend al leerlo, para el usuario
-   dueño del registro.
-*/
+/**
+ * @module src/routes/resultados
+ * @description Router de historial de resultados: guarda, lee, edita, borra y exporta a PDF registros cifrados.
+ *
+ * Principios SOLID aplicados:
+ *  - S (Responsabilidad única): única razón de cambio es la gestión HTTP del historial de resultados.
+ *  - D (Inversión de dependencias): delega cifrado, validación, migración y PDF en módulos de utils.
+ * Notas: el contenido sensible se cifra con AES-256-GCM antes de tocar la base y se descifra solo en memoria,
+ * para el usuario dueño del registro.
+ */
 
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
@@ -17,7 +19,9 @@ import { migrarRegistroLegado } from '../utils/registroLegado.js';
 
 export const resultadosRouter = Router();
 
-// Exige que el usuario ya haya dado su consentimiento antes de guardar nada.
+/** Indica si el usuario registró consentimiento; es requisito antes de guardar resultados.
+ * @param {string} usuarioId - id del usuario autenticado.
+ * @returns {Promise<boolean>} true si existe un consentimiento. */
 async function tieneConsentimientoVigente(usuarioId) {
   const { data } = await supabaseAdmin
     .from('consentimientos')
@@ -30,7 +34,7 @@ async function tieneConsentimientoVigente(usuarioId) {
 
 resultadosRouter.post('/', requireAuth, async (req, res) => {
   const { participante, payload: payloadRecibido } = req.body || {};
-  // Registros anteriores a v6 (cognitivo/"corporales") se adaptan antes de validar.
+  // Los registros anteriores a v6 (cognitivo/"corporales") se adaptan antes de validar.
   const payload = migrarRegistroLegado(payloadRecibido);
 
   const validacionParticipante = validarParticipante(participante);
@@ -55,22 +59,10 @@ resultadosRouter.post('/', requireAuth, async (req, res) => {
       error: 'Debes aceptar la autorización de tratamiento de datos antes de guardar resultados.',
     });
   }
-  //Aqui el programa realiza:
-  // Proteccion contra guardado duplicado a nivel de servidor: no
-  // confiar solo en el estado del frontend. Si en los ultimos 5
-  // segundos este mismo usuario ya guardo un resultado para el
-  // mismo participante (nombre + edad), se asume que es un reenvio
-  // (doble clic, reintento de red) y se devuelve el registro ya
-  // existente en vez de crear uno nuevo. esto para evitarr que se guarde varias veces un resultado.
-  //
-  // Nota de diseño: esto es un ataja o estrategia por ventana de tiempo, no
-  // una deduplicacion por contenido exacto (que requeriria guardar un
-  // hash del payload en una columna nueva.... una migracion de esquema
-  // que no se aplico aqui para no forzar un cambio de base de datos
-  // como parte de esta tarea). Cubre el caso real que queremos evitar
-  // (clics repetidos accidentales), pero dos analisis genuinamente
-  // identicos guardados con mas de 5s de diferencia SI se guardan
-  // como registros separados, a proposito.
+  // Protección contra guardado duplicado en el servidor: si en los últimos 5 s el mismo usuario guardó
+  // un resultado para el mismo participante (nombre + edad), se asume reenvío (doble clic, reintento de red)
+  // y se devuelve el registro existente. Es una ventana de tiempo, no deduplicación por contenido (que exigiría
+  // un hash en una columna nueva): dos análisis idénticos separados por más de 5 s se guardan por separado.
   const haceCincoSegundos = new Date(Date.now() - 5000).toISOString();
   const { data: recientes } = await supabaseAdmin
     .from('resultados_test')
@@ -102,8 +94,7 @@ resultadosRouter.post('/', requireAuth, async (req, res) => {
     .single();
 
   if (error) {
-    // No ocultar el motivo real en los logs del servidor (aunque al
-    // cliente se le de un mensaje generico por seguridad).
+    // El motivo real se registra en el servidor; al cliente solo se le da un mensaje genérico.
     console.error('Error al insertar resultado en Supabase:', error);
     return res.status(500).json({ error: 'No se pudo guardar el resultado.' });
   }
@@ -144,10 +135,8 @@ resultadosRouter.get('/', requireAuth, async (req, res) => {
         ...payload,
       };
     } catch (e) {
-      // Error NO silencioso a nivel de servidor: se registra en los
-      // logs de Render con el id de la fila afectada para poder
-      // diagnosticar registros corruptos o con clave rotada, aunque
-      // de cara al usuario se omite en vez de tumbar toda la respuesta.
+      // Se registra con el id de la fila para diagnosticar registros corruptos o con clave rotada;
+      // al usuario se le omite el registro en vez de fallar toda la respuesta.
       console.error(`No se pudo descifrar el resultado ${fila.id}:`, e.message);
       return null;
     }
@@ -164,7 +153,7 @@ resultadosRouter.get('/', requireAuth, async (req, res) => {
 
 resultadosRouter.put('/:id', requireAuth, async (req, res) => {
   const { participante, payload: payloadRecibido } = req.body || {};
-  // Registros anteriores a v6 (cognitivo/"corporales") se adaptan antes de validar.
+  // Los registros anteriores a v6 (cognitivo/"corporales") se adaptan antes de validar.
   const payload = migrarRegistroLegado(payloadRecibido);
 
   const validacionParticipante = validarParticipante(participante);
@@ -185,10 +174,8 @@ resultadosRouter.put('/:id', requireAuth, async (req, res) => {
 
   const { datosCifrados, iv, authTag } = cifrarJSON(payload);
 
-  // El WHERE con usuario_id es lo que impide que un usuario edite el
-  // registro de otro: si el id pertenece a otra cuenta, ninguna fila
-  // hace conexión y Supabase devuelve data vacio (nunca un error 200
-  // silencioso sobre datos ajenos). a ique no se puede registrar en usuario ajeno.
+  // El filtro por usuario_id impide editar registros ajenos: si el id pertenece a otra cuenta,
+  // ninguna fila coincide y Supabase devuelve data vacío.
   const { data, error } = await supabaseAdmin
     .from('resultados_test')
     .update({
@@ -208,8 +195,7 @@ resultadosRouter.put('/:id', requireAuth, async (req, res) => {
     return res.status(500).json({ error: 'No se pudo actualizar el resultado.' });
   }
   if (!data) {
-    // O no existe, o no pertenece a este usuario — mismo mensaje en
-    // ambos casos para no revelar la existencia de registros ajenos.
+    // Mismo mensaje si no existe o es ajeno, para no revelar registros de otros usuarios.
     return res.status(404).json({ error: 'Registro no encontrado.' });
   }
 
@@ -228,26 +214,20 @@ resultadosRouter.delete('/:id', requireAuth, async (req, res) => {
     .from('resultados_test')
     .delete()
     .eq('id', req.params.id)
-    .eq('usuario_id', req.usuario.id); // nunca confiar solo en el id de la URL
+    .eq('usuario_id', req.usuario.id); // Nunca se confía solo en el id de la URL.
 
   if (error) return res.status(500).json({ error: 'No se pudo borrar el resultado.' });
   res.json({ ok: true });
 });
 
-/**
- * GET /resultados/:id/pdf, descarga profesional en PDF de un
- * resultado ya guardado (usuario autenticado). Sigue la arquitectura
- * establecida que es base de datos (cifrada) -> backend autorizado -> descifrado
- * controlado en memoria -> generación del PDF -> respuesta al usuario.
- * Nunca se expone la clave, el IV, el authTag ni ningun detalle
- * tecnico de Supabase en el documento.
- */
+// GET /resultados/:id/pdf: PDF de un resultado guardado. Flujo: base cifrada -> backend autorizado ->
+// descifrado en memoria -> PDF. Nunca se expone clave, IV, authTag ni detalles técnicos de Supabase.
 resultadosRouter.get('/:id/pdf', requireAuth, async (req, res) => {
   const { data: fila, error } = await supabaseAdmin
     .from('resultados_test')
     .select('id, participante_nombre, datos_cifrados, iv, auth_tag')
     .eq('id', req.params.id)
-    .eq('usuario_id', req.usuario.id) // mismo control de propiedad que en GET/PUT/DELETE
+    .eq('usuario_id', req.usuario.id) // Mismo control de propiedad que en GET/PUT/DELETE.
     .maybeSingle();
 
   if (error) {
@@ -277,18 +257,12 @@ resultadosRouter.get('/:id/pdf', requireAuth, async (req, res) => {
   generarPdfInforme(payload, res);
 });
 
-/**
- * POST /resultados/pdf: genera el mismo PDF profesional pero a
- * partir de un payload enviado directamente en la petición, sin
- * pasar por la base de datos. Es la ruta que usa el MODO INVITADO
- * (nunca tuvo un registro cifrado en Supabase, porque sus datos
- * viven solo en el navegador) para tener la misma descarga en PDF
- * que un usuario autenticado. No requiere sesión, validado y
- * limitado por el rate limiter global para evitar abuso.
- */
+// POST /resultados/pdf: PDF a partir de un payload enviado en la petición, sin pasar por la base.
+// Lo usa el modo invitado (sus datos viven solo en el navegador). No requiere sesión; el payload se valida
+// y el limitador global de la API evita abusos.
 resultadosRouter.post('/pdf', async (req, res) => {
   const { participante, payload: payloadRecibido } = req.body || {};
-  // Registros anteriores a v6 (cognitivo/"corporales") se adaptan antes de validar.
+  // Los registros anteriores a v6 (cognitivo/"corporales") se adaptan antes de validar.
   const payload = migrarRegistroLegado(payloadRecibido);
 
   const validacionParticipante = validarParticipante(participante);

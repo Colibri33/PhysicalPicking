@@ -1,17 +1,13 @@
-/* 
-   routes/derechosArco.js
-   Implementa los derechos ARCO (Acceso, Rectificación, Cancelación
-   -supresión-, Oposición) exigidos por la Ley 1581/2012 y su
-   Decreto reglamentario 1377/2013 y funciona asi:
-     - GET /arco/exportar  → derecho de ACCESO: descarga todos los
-       datos que tenemos del titular, en un JSON legible o Pdf.
-     - DELETE /arco/cuenta → derecho de CANCELACIÓN/SUPRESIÓN:
-       borra la cuenta y, en cascada, todos sus datos.
-   La RECTIFICACIÓN se cubre con los endpoints normales de edición
-   de perfil/resultados; la OPOSICIÓN se cubre dejando de tratar
-   datos del usuario (cerrando/anonimizando la cuenta) — mismo
-   endpoint de cancelación.
-   */
+/**
+ * @module src/routes/derechosArco
+ * @description Router de derechos ARCO (Ley 1581/2012, Decreto 1377/2013): exportación y supresión de datos del titular.
+ *
+ * Principios SOLID aplicados:
+ *  - S (Responsabilidad única): única razón de cambio es el ejercicio de derechos ARCO.
+ *  - D (Inversión de dependencias): usa requireAuth, supabaseAdmin y descifrarJSON importados.
+ * Notas: GET /arco/exportar cubre ACCESO; DELETE /arco/cuenta cubre CANCELACIÓN y OPOSICIÓN (cierre de la cuenta).
+ * La RECTIFICACIÓN se cubre con los endpoints de edición de resultados.
+ */
 
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
@@ -64,15 +60,15 @@ arcoRouter.get('/exportar', requireAuth, async (req, res) => {
 arcoRouter.delete('/cuenta', requireAuth, async (req, res) => {
   const usuarioId = req.usuario.id;
 
-  // Auditoría ANTES de borrar (después ya no habrá usuario_id para poderlo enlazar)
+  // La auditoría se registra antes de borrar: después ya no existiría usuario_id al que enlazarla.
   await supabaseAdmin.from('auditoria_accesos').insert({
     usuario_id: usuarioId,
     accion: 'eliminar_cuenta',
     ip_origen: req.ip,
   });
 
-  // Borra el usuario de auth.users; perfiles, consentimientos y
-  // resultados_test caen en cascada por las FK(foregeinkeis) definidas en schema.sql.
+  // Borra el usuario de auth.users; perfiles, consentimientos y resultados_test
+  // caen en cascada por las claves foráneas definidas en schema.sql.
   const { error } = await supabaseAdmin.auth.admin.deleteUser(usuarioId);
   if (error) return res.status(500).json({ error: 'No se pudo eliminar la cuenta.' });
 

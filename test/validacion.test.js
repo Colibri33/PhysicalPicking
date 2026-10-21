@@ -1,3 +1,11 @@
+/**
+ * @module test/validacion.test
+ * @description Pruebas de validación de payloads v6, migración de registros legados y rangos antropométricos.
+ *
+ * Principios SOLID aplicados:
+ *  - S (Responsabilidad única): verifica únicamente validacion.js y registroLegado.js.
+ */
+
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { validarPayloadAnalisis, validarValoresAnalisis, DEFINICIONES_FISICAS } from '../src/utils/validacion.js';

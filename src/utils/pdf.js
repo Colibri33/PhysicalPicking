@@ -1,16 +1,11 @@
-/*
-   utils/pdf.js
-   Genera el informe descargable en PDF a partir del payload de un
-   analisis (la misma forma que produce el frontend: participante,
-   fisicas, antropometricas, consolidado, rankingDeportes,
-   interpretacion y, desde v6, el bloque opcional `evaluacion`). Se usa tanto para usuarios autenticados (tras
-   descifrar su registro guardado) como para el modo invitado (que
-   envia el payload directamente, sin pasar por la base de datos).
-
-   IMPORTANTE: el PDF NUNCA debe incluir: claves de cifrado, IV,
-   authTag, tokens, ids internos de Supabase, ni ninguna estructura
-   tecnica de la base de datos. Solo el contenido legible pensado
-   para el usuario final.
+/**
+ * @module src/utils/pdf
+ * @description Genera el informe PDF descargable a partir del payload de un análisis (usuarios autenticados e invitados).
+ *
+ * Principios SOLID aplicados:
+ *  - S (Responsabilidad única): única razón de cambio es el contenido y diseño del informe PDF.
+ *  - D (Inversión de dependencias): escribe en cualquier WritableStream recibido (res), sin acoplarse a Express.
+ * Notas: el PDF nunca debe incluir claves de cifrado, IV, authTag, tokens, ids internos de Supabase ni estructura técnica de la base de datos.
  */
 
 import PDFDocument from 'pdfkit';
@@ -23,7 +18,9 @@ const ETIQUETA_CAPACIDAD = {
   flexibilidad: 'flexibilidad', equilibrio: 'equilibrio',
 };
 
-// Motivos por los que una familia no es recomendable (registros antiguos: solo carencias).
+/** Describe los motivos por los que una familia deportiva no es recomendable (registros antiguos: solo carencias).
+ * @param {Object} f - familia del ranking.
+ * @returns {string} motivos separados por punto y coma. */
 function textoNoFirme(f) {
   const motivos = Array.isArray(f.motivosNoFirme)
     ? f.motivosNoFirme
@@ -34,6 +31,9 @@ function textoNoFirme(f) {
     : `${ETIQUETA_CAPACIDAD[m.capacidad] ?? m.capacidad} sin dato (demanda ${m.demanda})`)).join('; ');
 }
 
+/** Formatea una fecha ISO en español; devuelve el valor original si no es válida.
+ * @param {string} iso - fecha en formato ISO.
+ * @returns {string} fecha legible. */
 function formatearFecha(iso) {
   try {
     return new Date(iso).toLocaleString('es-CO', { dateStyle: 'long', timeStyle: 'short' });
@@ -42,19 +42,17 @@ function formatearFecha(iso) {
   }
 }
 
-/**
- * generarPdfInforme — construye el documento y lo escribe en `res`
- * (un WritableStream, tipicamente la respuesta HTTP de Express).
- * No retorna una promesa que resuelva con el buffer completo: hace
- * streaming directo, para no cargar todo el PDF en memoria.
- */
+/** Construye el informe y lo transmite a `res` por streaming, sin cargar el PDF completo en memoria.
+ * @param {Object} payload - análisis con la forma que produce el frontend.
+ * @param {import('stream').Writable} res - destino del PDF (típicamente la respuesta HTTP).
+ * @returns {void} */
 export function generarPdfInforme(payload, res) {
   const doc = new PDFDocument({ size: 'LETTER', margins: { top: 50, bottom: 50, left: 56, right: 56 } });
   doc.pipe(res);
 
   const p = payload.participante || {};
 
-  //Encabezado
+  // Encabezado.
   doc.fillColor(AZUL).font('Helvetica-Bold').fontSize(22).text('PHYSICALPICKING', { align: 'center' });
   doc.fillColor(GRIS).font('Helvetica').fontSize(10)
     .text('Informe de evaluación multivariable del rendimiento deportivo', { align: 'center' });
@@ -62,7 +60,7 @@ export function generarPdfInforme(payload, res) {
   doc.strokeColor('#E5E7EB').lineWidth(1).moveTo(56, doc.y).lineTo(556, doc.y).stroke();
   doc.moveDown(1);
 
-  //Datos del participante
+  // Datos del participante.
   seccionTitulo(doc, 'Datos del participante');
   tablaClaveValor(doc, [
     ['Nombre', p.nombre || '—'],
@@ -73,14 +71,14 @@ export function generarPdfInforme(payload, res) {
   ]);
   doc.moveDown(0.6);
 
-  //Variables físicas
+  // Variables físicas.
   if (payload.fisicas) {
     seccionTitulo(doc, 'Resultados físicos (normalizados)');
     tablaClaveValor(doc, Object.entries(payload.fisicas).map(([k, v]) => [k, `${Math.round(v)}%`]));
     doc.moveDown(0.6);
   }
 
-  //Variables antropometricas (solo las registradas)
+  // Variables antropométricas (solo las registradas).
   const antrop = Object.entries(payload.antropometricas || {})
     .filter(([, v]) => v !== '' && v !== null && v !== undefined);
   if (antrop.length > 0) {
@@ -89,7 +87,7 @@ export function generarPdfInforme(payload, res) {
     doc.moveDown(0.6);
   }
 
-  //Seguridad (PAR-Q+): siempre antes de la recomendacion
+  // Seguridad (PAR-Q+): siempre antes de la recomendación.
   const seguridad = payload.evaluacion?.informe?.seguridad;
   if (seguridad) {
     seccionTitulo(doc, 'Seguridad y alertas (PAR-Q+ y antecedentes)');
@@ -99,14 +97,14 @@ export function generarPdfInforme(payload, res) {
     doc.moveDown(0.6);
   }
 
-  //Perfil consolidado
+  // Perfil consolidado.
   if (payload.perfilesDeportivos) {
     seccionTitulo(doc, 'Perfil funcional consolidado');
     tablaClaveValor(doc, Object.entries(payload.perfilesDeportivos).map(([k, v]) => [k, `${Math.round(v)}%`]));
     doc.moveDown(0.6);
   }
 
-  //Complementarias PhysicalPicking (no es PAR-Q+)
+  // Complementarias propias de PhysicalPicking (no es PAR-Q+).
   const comp = payload.complementarias?.resultado;
   if (comp) {
     seccionTitulo(doc, 'Antecedentes y experiencia (PhysicalPicking)');
@@ -118,7 +116,7 @@ export function generarPdfInforme(payload, res) {
       doc.text(`Lesión previa: sí${zona ? ` (${zona})` : ''}`
         + `${ant.fechaAprox ? `, fecha aprox.: ${ant.fechaAprox}` : ''}`
         + `${ant.tratamiento === true ? ', con tratamiento' : ant.tratamiento === false ? ', sin tratamiento' : ''}.`);
-      // R-SEG-04: registros anteriores a la regla no traen la alerta en el flujo.
+      // R-SEG-04: los registros anteriores a la regla no traen la alerta en el flujo.
       const yaAlertada = (payload.evaluacion?.informe?.seguridad?.alertas || []).some(a => a.codigo === 'ANTECEDENTE_LESION');
       if (!yaAlertada) {
         doc.text('Se recomienda un periodo de adaptación y recuperación previa antes de iniciar nuevamente con algún deporte.');
@@ -134,7 +132,7 @@ export function generarPdfInforme(payload, res) {
     doc.moveDown(0.6);
   }
 
-  //Resistencia aeróbica, Léger (nivel alcanzado; estimacion de VO2max pendiente)
+  // Resistencia aeróbica, Léger (nivel alcanzado; estimación de VO2max pendiente).
   const palierLeger = payload.leger?.palier ?? payload.realesF?.resistencia;
   if (palierLeger !== undefined && palierLeger !== '' && palierLeger !== null && Number(palierLeger) <= 21) {
     seccionTitulo(doc, 'Resistencia aeróbica (Léger)');
@@ -143,7 +141,7 @@ export function generarPdfInforme(payload, res) {
     doc.moveDown(0.6);
   }
 
-  //Cuestionarios IPAQ / PSQI (resumen calculado en el frontend)
+  // Cuestionarios IPAQ y PSQI (resumen calculado en el frontend).
   const ipaqRes = payload.ipaq?.resultado;
   if (ipaqRes?.categoria) {
     seccionTitulo(doc, 'Actividad física (IPAQ corto)');
@@ -160,19 +158,19 @@ export function generarPdfInforme(payload, res) {
     doc.moveDown(0.6);
   }
 
-  //Interpretación
+  // Interpretación.
   if (payload.interpretacion?.parrafo) {
     seccionTitulo(doc, 'Interpretación');
     doc.font('Helvetica').fontSize(10).fillColor('#1F2937').text(payload.interpretacion.parrafo, { align: 'justify' });
     doc.moveDown(0.6);
   }
 
-  //Recomendación deportiva: ranking del DecisionEngine si existe; si no, el heredado.
+  // Recomendación deportiva: ranking del DecisionEngine si existe; si no, el heredado.
   const rankingMotor = payload.evaluacion?.etapas?.ranking;
   const familiasMotor = rankingMotor?.familias;
   if (Array.isArray(familiasMotor) && familiasMotor.length > 0) {
     // R-DEC-03: si ninguna familia es firme no se presenta un deporte
-    // (registros antiguos sin `sinFamiliaCompatible` conservan su forma).
+    // (los registros antiguos sin `sinFamiliaCompatible` conservan su forma).
     const recomendada = rankingMotor?.recomendada ?? (rankingMotor?.sinFamiliaCompatible ? null : familiasMotor[0]);
     const plan = payload.evaluacion?.etapas?.planAdaptacion;
     seccionTitulo(doc, 'Recomendación deportiva (DecisionEngine)');
@@ -231,7 +229,7 @@ export function generarPdfInforme(payload, res) {
     doc.moveDown(0.3);
   }
 
-  //Pie de pagina: fechas 
+  // Pie de página.
   doc.moveDown(0.8);
   doc.strokeColor('#E5E7EB').lineWidth(1).moveTo(56, doc.y).lineTo(556, doc.y).stroke();
   doc.moveDown(0.5);
@@ -243,11 +241,19 @@ export function generarPdfInforme(payload, res) {
   doc.end();
 }
 
+/** Escribe el título de una sección.
+ * @param {PDFDocument} doc - documento en construcción.
+ * @param {string} texto - título.
+ * @returns {void} */
 function seccionTitulo(doc, texto) {
   doc.font('Helvetica-Bold').fontSize(12).fillColor(AZUL).text(texto);
   doc.moveDown(0.3);
 }
 
+/** Escribe pares clave-valor, una línea por par.
+ * @param {PDFDocument} doc - documento en construcción.
+ * @param {Array<[string, string]>} filas - pares [clave, valor].
+ * @returns {void} */
 function tablaClaveValor(doc, filas) {
   doc.font('Helvetica').fontSize(9.5).fillColor('#1F2937');
   filas.forEach(([clave, valor]) => {
@@ -255,6 +261,9 @@ function tablaClaveValor(doc, filas) {
   });
 }
 
+/** Pone en mayúscula la primera letra.
+ * @param {*} s - texto.
+ * @returns {string} texto capitalizado. */
 function capitalizar(s) {
   return String(s).charAt(0).toUpperCase() + String(s).slice(1);
 }
