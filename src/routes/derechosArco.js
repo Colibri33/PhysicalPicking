@@ -13,6 +13,7 @@ import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { supabaseAdmin } from '../supabaseAdmin.js';
 import { descifrarJSON } from '../utils/crypto.js';
+import { migrarRegistroLegado } from '../utils/registroLegado.js';
 
 export const arcoRouter = Router();
 
@@ -30,7 +31,7 @@ arcoRouter.get('/exportar', requireAuth, async (req, res) => {
 
   const resultadosLegibles = (resultados || []).map(fila => {
     try {
-      const payload = descifrarJSON({ datosCifrados: fila.datos_cifrados, iv: fila.iv, authTag: fila.auth_tag });
+      const payload = migrarRegistroLegado(descifrarJSON({ datosCifrados: fila.datos_cifrados, iv: fila.iv, authTag: fila.auth_tag }));
       return {
         id: fila.id,
         participante: { nombre: fila.participante_nombre, edad: fila.participante_edad },
