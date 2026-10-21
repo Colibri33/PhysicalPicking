@@ -149,7 +149,7 @@ export async function llamarDeepSeek(messages, { fetchImpl = fetch, env = proces
 export function mensajesInterpretacion(resumen) {
   return [
     { role: 'system', content: PROMPT_SISTEMA },
-    { role: 'user', content: `RESUMEN (JSON):\n${JSON.stringify(resumen)}\n\nRedacta la interpretación del análisis para la persona evaluada. Responde ÚNICAMENTE con un objeto JSON válido (sin texto antes ni después, sin bloques de código) con exactamente estas claves:\n{\n  "lectura": "párrafo de 2-3 frases con la lectura general del perfil",\n  "fortalezas": ["3 a 4 frases cortas"],\n  "mejorar": ["3 a 4 frases cortas, accionables"],\n  "deportes": [{"nombre": "deporte o familia", "porcentaje": numero o null, "razon": "1-2 frases"}],\n  "precauciones": ["1 a 3 frases cortas"]\n}\nUsa solo datos del resumen; en "deportes" incluye hasta 3, empezando por el mejor compatible.` },
+    { role: 'user', content: `RESUMEN (JSON):\n${JSON.stringify(resumen)}\n\nRedacta la interpretación del análisis para la persona evaluada. Responde ÚNICAMENTE con un objeto JSON válido (sin texto antes ni después, sin bloques de código) con exactamente estas claves:\n{\n  "resumen": "párrafo de 2-3 frases con la lectura general del perfil",\n  "fuertes": [{"titulo": "capacidad o fortaleza (2-3 palabras)", "detalle": "1 frase breve"}],\n  "mejorar": [{"titulo": "qué mejorar (2-3 palabras)", "detalle": "1 frase accionable"}],\n  "deportes": [{"nombre": "deporte o familia", "porcentaje": numero o null, "razon": "1-2 frases"}],\n  "precaucion": "1 frase con las precauciones"\n}\nUsa solo datos del resumen; en "fuertes" y "mejorar" incluye 3-4 elementos y en "deportes" hasta 3, empezando por el mejor compatible.` },
   ];
 }
 
