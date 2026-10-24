@@ -31,6 +31,14 @@ const ETIQUETA_CAPACIDAD = {
   flexibilidad: 'flexibilidad', equilibrio: 'equilibrio',
 };
 
+// Nombre y orden de las capacidades del motor (copia de evaluacion/capacidades.js del frontend).
+const NOMBRE_CAPACIDAD = {
+  fuerza: 'Fuerza prensil', fuerza_explosiva: 'Fuerza explosiva', vo2max: 'Resistencia aeróbica',
+  flexibilidad: 'Flexibilidad', equilibrio: 'Equilibrio',
+};
+const NIVELES = ['Muy bajo', 'Bajo', 'Medio', 'Alto', 'Muy alto'];
+
+// Claves de captura (`realesF`), que son las que usan los puntajes 0-100 de registros anteriores.
 const ETIQUETA_FISICA = {
   fuerza: 'Fuerza prensil', fuerzaExp: 'Fuerza explosiva', resistencia: 'Resistencia aeróbica',
   flexibilidad: 'Flexibilidad', equilibrio: 'Equilibrio',
@@ -240,11 +248,19 @@ export function generarPdfInforme(payload, res) {
   doc.x = MARGEN_X;
   doc.y = yb + 84;
 
-  // Perfil físico.
+  // Perfil físico: nivel por capacidad del motor; los registros anteriores a la migración traen puntajes 0-100.
+  const nivelesMotor = payload.evaluacion?.etapas?.decisionEngine?.entrada?.capacidades;
   const fis = payload.fisicas
     ? Object.keys(ETIQUETA_FISICA).filter(k => payload.fisicas[k] !== undefined && payload.fisicas[k] !== null)
     : [];
-  if (fis.length > 0) {
+  if (nivelesMotor) {
+    seccionTitulo(doc, 'Perfil físico');
+    Object.entries(NOMBRE_CAPACIDAD).forEach(([id, nombre]) => {
+      const nivel = nivelesMotor[id] ?? null;
+      barra(doc, nombre, (NIVELES.indexOf(nivel) + 1) * 20, MORADO, nivel ?? 'Sin dato');
+    });
+    doc.moveDown(0.4);
+  } else if (fis.length > 0) {
     seccionTitulo(doc, 'Perfil físico');
     fis.forEach(k => barra(doc, ETIQUETA_FISICA[k], payload.fisicas[k]));
     doc.moveDown(0.4);
@@ -337,8 +353,11 @@ export function generarPdfInforme(payload, res) {
       asegurar(doc, 60);
       const y0 = doc.y;
       doc.roundedRect(MARGEN_X, y0, ANCHO, 50, 12).fill(MORADO);
-      doc.font('Poppins').fontSize(8.5).fillColor('#D6D0F5').text('Mayor compatibilidad', MARGEN_X + 18, y0 + 9, { lineBreak: false });
-      doc.font('Fredoka').fontSize(17).fillColor('#FFFFFF').text(recomendada?.nombre ?? recomendada?.id ?? '—', MARGEN_X + 18, y0 + 23, { width: ANCHO - 120, lineBreak: false });
+      // Familias firmes con la misma compatibilidad y los mismos criterios de desempate se presentan como conjunto.
+      const grupo = (rankingMotor?.empatadas?.length ?? 0) > 1 ? rankingMotor.empatadas : [recomendada];
+      const nombreGrupo = grupo.map(f => f.nombre ?? f.id ?? '—').join(' · ');
+      doc.font('Poppins').fontSize(8.5).fillColor('#D6D0F5').text(grupo.length > 1 ? `Mayor compatibilidad (${grupo.length} familias empatadas)` : 'Mayor compatibilidad', MARGEN_X + 18, y0 + 9, { lineBreak: false });
+      doc.font('Fredoka').fontSize(nombreGrupo.length > 26 ? 12 : 17).fillColor('#FFFFFF').text(nombreGrupo, MARGEN_X + 18, y0 + 23, { width: ANCHO - 120, lineBreak: false });
       if (recomendada?.porcentaje != null) {
         doc.font('Fredoka').fontSize(24).fillColor('#FFFFFF').text(`${recomendada.porcentaje}%`, MARGEN_X, y0 + 14, { width: ANCHO - 18, align: 'right', lineBreak: false });
       }

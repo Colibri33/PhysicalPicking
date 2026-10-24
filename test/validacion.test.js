@@ -8,7 +8,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validarPayloadAnalisis, validarValoresAnalisis, DEFINICIONES_FISICAS } from '../src/utils/validacion.js';
+import { validarPayloadAnalisis, validarValoresAnalisis, validarParticipante, DEFINICIONES_FISICAS } from '../src/utils/validacion.js';
 import { migrarRegistroLegado } from '../src/utils/registroLegado.js';
 
 const realesF = Object.fromEntries(DEFINICIONES_FISICAS.map(d => [d.id, d.min]));
@@ -78,4 +78,37 @@ test('% grasa y % muscular historicos se conservan en _legado', () => {
   assert.deepEqual(m._legado.antropometriaRetirada, { grasa: '20', muscular: '42' });
   assert.deepEqual(migrarRegistroLegado(m), m);
   assert.equal(validarPayloadAnalisis(m).ok, true);
+});
+
+test('participante: el sexo biológico es obligatorio y solo masculino o femenino', () => {
+  const base = { nombre: 'X', edad: 22 };
+  assert.equal(validarParticipante({ ...base, genero: 'masculino' }).ok, true);
+  assert.equal(validarParticipante({ ...base, genero: 'femenino' }).ok, true);
+  for (const genero of ['otro', '', undefined, null]) {
+    const r = validarParticipante({ ...base, genero });
+    assert.equal(r.ok, false, `genero=${String(genero)}`);
+    assert.match(r.error, /sexo biológico/);
+  }
+});
+
+test('payload actual sin campos heredados es valido si trae evaluacion', () => {
+  const { fisicas: _f, consolidado: _c, perfilesDeportivos: _p, rankingDeportes: _r, interpretacion: _i, ...actual } = nuevo();
+  assert.deepEqual(validarPayloadAnalisis(actual), { ok: true });
+  assert.deepEqual(validarValoresAnalisis(actual), { ok: true });
+});
+
+test('payload sin evaluacion ni campos heredados se rechaza', () => {
+  const { fisicas: _f, consolidado: _c, perfilesDeportivos: _p, rankingDeportes: _r, interpretacion: _i, evaluacion: _e, ...sinNada } = nuevo();
+  assert.equal(validarPayloadAnalisis(sinNada).ok, false);
+});
+
+test('registro anterior sin evaluacion sigue exigiendo el bloque heredado completo', () => {
+  const { evaluacion: _e, ...anterior } = nuevo();
+  assert.deepEqual(validarPayloadAnalisis(anterior), { ok: true });
+  const { consolidado: _c, ...incompleto } = anterior;
+  assert.equal(validarPayloadAnalisis(incompleto).ok, false);
+});
+
+test('un campo heredado mal formado se rechaza aunque haya evaluacion', () => {
+  assert.equal(validarPayloadAnalisis({ ...nuevo(), consolidado: 'x' }).ok, false);
 });

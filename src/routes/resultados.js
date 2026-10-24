@@ -78,7 +78,16 @@ resultadosRouter.post('/', requireAuth, async (req, res) => {
     return res.status(200).json({ ok: true, resultado: recientes[0], duplicado: true });
   }
 
-  const { datosCifrados, iv, authTag } = cifrarJSON(payload);
+  let datosCifrados;
+  let iv;
+  let authTag;
+  try {
+    ({ datosCifrados, iv, authTag } = cifrarJSON(payload));
+  } catch (e) {
+    // Error de configuracion o de cifrado: se registra el motivo y se responde error generico; nunca se exponen datos.
+    console.error('Error al cifrar el resultado antes de guardar:', e.message);
+    return res.status(500).json({ error: 'No se pudo guardar el resultado.' });
+  }
 
   const { data, error } = await supabaseAdmin
     .from('resultados_test')
@@ -172,7 +181,16 @@ resultadosRouter.put('/:id', requireAuth, async (req, res) => {
     return res.status(400).json({ error: validacionValores.error });
   }
 
-  const { datosCifrados, iv, authTag } = cifrarJSON(payload);
+  let datosCifrados;
+  let iv;
+  let authTag;
+  try {
+    ({ datosCifrados, iv, authTag } = cifrarJSON(payload));
+  } catch (e) {
+    // Error de configuracion o de cifrado: se registra el motivo y se responde error generico; nunca se exponen datos.
+    console.error('Error al cifrar el resultado antes de actualizar:', e.message);
+    return res.status(500).json({ error: 'No se pudo actualizar el resultado.' });
+  }
 
   // El filtro por usuario_id impide editar registros ajenos: si el id pertenece a otra cuenta,
   // ninguna fila coincide y Supabase devuelve data vacío.

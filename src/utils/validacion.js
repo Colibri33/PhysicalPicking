@@ -5,13 +5,14 @@
  * Principios SOLID aplicados:
  *  - S (Responsabilidad única): única razón de cambio es la regla de validación de datos de entrada.
  *  - O (Abierto/Cerrado): validarVariable es genérico; nuevas variables se añaden en DEFINICIONES_FISICAS o RANGOS_ANTROPOMETRICOS.
- * Notas: estructura y rangos reales del frontend (src/logic/modelo.js); el registro v6 incluye participante, realesF (crudos),
- * fisicas (0-100), antropometricas, consolidado, perfilesDeportivos, rankingDeportes, interpretacion y, opcionales,
- * cuestionarios y evaluacion. v6 eliminó el módulo cognitivo y renombró "corporales" a "antropometricas" (ajCorp a ajAntrop);
+ * Notas: estructura y rangos reales del frontend. El registro actual incluye participante, realesF (crudos), antropometricas y
+ * `evaluacion` (salida del flujo de src/evaluacion); opcionales: cuestionarios y el resto de módulos. Los registros anteriores a la
+ * migración no traen `evaluacion` y conservan fisicas (0-100), consolidado, perfilesDeportivos, rankingDeportes e interpretacion,
+ * que se siguen exigiendo en ese caso. v6 eliminó el módulo cognitivo y renombró "corporales" a "antropometricas" (ajCorp a ajAntrop);
  * los registros antiguos se adaptan con utils/registroLegado.js antes de validar.
- * Fuente única de verdad: frontend y backend son repositorios Node independientes sin paquete común, por lo que
- * DEFINICIONES_FISICAS y RANGOS_ANTROPOMETRICOS son copia espejo manual de VARS_FISICAS y RANGOS_ANTROPOMETRICOS
- * de frontend/src/logic/modelo.js. Si cambia un rango allá, debe actualizarse aquí; la desincronización es una limitación conocida.
+ * Frontend y backend son repositorios Node independientes sin paquete común, por lo que DEFINICIONES_FISICAS y RANGOS_ANTROPOMETRICOS
+ * son copia espejo de VARIABLES_CAPTURA (evaluacion/capacidades.js) y RANGOS_ANTROPOMETRICOS (evaluacion/antropometria.js) del frontend.
+ * Si cambia un rango allá, debe actualizarse aquí; test/baremos.test.js del frontend compara ambas copias.
  */
 
 const NOMBRE_MAX_LEN = 120;
@@ -19,17 +20,17 @@ const NOMBRE_MAX_LEN = 120;
 const EDAD_MIN = 18;
 const EDAD_MAX = 30;
 
-// Copia espejo de VARS_FISICAS (frontend): fuerza prensil como suma 0-200 y resistencia aeróbica
+// Copia espejo de VARIABLES_CAPTURA (frontend, evaluacion/capacidades.js): fuerza prensil como suma y resistencia aeróbica
 // como nivel máximo de Léger, entero 1-21 (ver esNivelLegerValido() en el frontend).
 export const DEFINICIONES_FISICAS = [
   { id: 'fuerza',       min: 20,   max: 200,  paso: 1,   unidad: 'kg',           direccion: 'mayor_mejor' },
-  { id: 'fuerzaExp',    min: 5,    max: 65,   paso: 1,   unidad: 'cm',           direccion: 'mayor_mejor' },
+  { id: 'fuerzaExp',    min: 5,    max: 100,  paso: 1,   unidad: 'cm',           direccion: 'mayor_mejor' },
   { id: 'resistencia',  min: 1,    max: 21,   paso: 1,   unidad: 'nivel',        direccion: 'mayor_mejor' },
-  { id: 'flexibilidad', min: -20,  max: 30,   paso: 1,   unidad: 'cm',           direccion: 'mayor_mejor' },
+  { id: 'flexibilidad', min: -20,  max: 60,   paso: 1,   unidad: 'cm',           direccion: 'mayor_mejor' },
   { id: 'equilibrio',   min: 0,    max: 60,   paso: 1,   unidad: 'intentos',     direccion: 'menor_mejor' },
 ];
 
-// Copia espejo de RANGOS_ANTROPOMETRICOS (frontend). Variables opcionales: peso, talla, cintura,
+// Copia espejo de RANGOS_ANTROPOMETRICOS (frontend, evaluacion/antropometria.js). Variables opcionales: peso, talla, cintura,
 // cadera (ICC, OMS 2008) y grasa visceral; solo límites de coherencia física para rechazar valores absurdos.
 const RANGOS_ANTROPOMETRICOS = {
   peso:      { min: 1,  max: 400 },
@@ -79,7 +80,10 @@ export function validarVariable(valor, definicion) {
   return { ok: true, valor: n };
 }
 
-/** Valida el participante recibido en req.body.participante (nombre y edad entera dentro del rango permitido).
+// Sexo biológico: los baremos físicos (AFISAL, Léger) solo existen para masculino y femenino. El campo se llama `genero` por compatibilidad con los registros guardados.
+const SEXOS_VALIDOS = ['masculino', 'femenino'];
+
+/** Valida el participante recibido en req.body.participante (nombre, edad entera dentro del rango permitido y sexo biológico).
  * @param {*} participante - objeto participante.
  * @returns {{ok: true, nombre: string, edad: number}|{ok: false, error: string}} datos normalizados o error. */
 export function validarParticipante(participante) {
@@ -109,6 +113,10 @@ export function validarParticipante(participante) {
     return { ok: false, error: `La edad del participante debe estar entre ${EDAD_MIN} y ${EDAD_MAX} años.` };
   }
 
+  if (!SEXOS_VALIDOS.includes(participante.genero)) {
+    return { ok: false, error: 'El sexo biológico del participante es obligatorio (masculino o femenino): los baremos se aplican por sexo.' };
+  }
+
   return { ok: true, nombre, edad: edadNum };
 }
 
@@ -120,14 +128,21 @@ export function validarPayloadAnalisis(payload) {
     return { ok: false, error: 'El contenido del analisis ("payload") debe ser un objeto, no un arreglo ni un valor suelto.' };
   }
 
-  const camposObjeto = ['participante', 'realesF', 'fisicas', 'antropometricas', 'consolidado', 'perfilesDeportivos', 'interpretacion'];
+  // Sin `evaluacion` (registro anterior a la migración) se exige además el bloque heredado completo.
+  const camposHeredados = ['fisicas', 'consolidado', 'perfilesDeportivos', 'interpretacion'];
+  const camposObjeto = ['participante', 'realesF', 'antropometricas', ...(payload.evaluacion === undefined ? camposHeredados : [])];
   for (const campo of camposObjeto) {
     if (!esObjetoPlano(payload[campo])) {
       return { ok: false, error: `El analisis no tiene una estructura valida: falta o es invalido el campo "${campo}".` };
     }
   }
+  for (const campo of camposHeredados) {
+    if (payload[campo] !== undefined && !esObjetoPlano(payload[campo])) {
+      return { ok: false, error: `El analisis no tiene una estructura valida: falta o es invalido el campo "${campo}".` };
+    }
+  }
 
-  if (!Array.isArray(payload.rankingDeportes)) {
+  if (payload.evaluacion === undefined ? !Array.isArray(payload.rankingDeportes) : (payload.rankingDeportes !== undefined && !Array.isArray(payload.rankingDeportes))) {
     return { ok: false, error: 'El analisis no tiene una estructura valida: "rankingDeportes" debe ser una lista.' };
   }
 
@@ -266,14 +281,14 @@ export function validarPayloadAnalisis(payload) {
   return { ok: true };
 }
 
-/** Valida en profundidad los valores numéricos: realesF contra su rango real y fisicas/consolidado en 0-100
- * (rango garantizado por normalizarValor), además de las antropométricas.
+/** Valida en profundidad los valores numéricos: realesF contra su rango real y, si el registro los trae (anteriores a la
+ * migración), fisicas y consolidado en 0-100, además de las antropométricas.
  * @param {Object} payload - registro de análisis ya validado estructuralmente.
  * @returns {{ok: true}|{ok: false, error: string}} resultado de la validación. */
 export function validarValoresAnalisis(payload) {
   // Blindaje defensivo: aunque se invoca tras validarPayloadAnalisis, no debe lanzar
   // una excepción si se usa de forma aislada; devuelve un error claro.
-  const camposRequeridos = ['realesF', 'fisicas', 'consolidado', 'antropometricas'];
+  const camposRequeridos = ['realesF', 'antropometricas'];
   for (const campo of camposRequeridos) {
     if (!esObjetoPlano(payload?.[campo])) {
       return { ok: false, error: `Falta o es invalido el campo "${campo}" del analisis.` };
@@ -286,8 +301,8 @@ export function validarValoresAnalisis(payload) {
     if (!resultado.ok) return resultado;
   }
 
-  // 2. Valores normalizados: 0-100 por construcción (clamp en normalizarValor, modelo.js).
-  for (const def of DEFINICIONES_FISICAS) {
+  // 2. Valores normalizados del cálculo heredado (solo registros anteriores a la migración): 0-100.
+  for (const def of (payload.fisicas === undefined ? [] : DEFINICIONES_FISICAS)) {
     const v = payload.fisicas[def.id];
     if (!esNumeroValido(v)) {
       return { ok: false, error: `El valor fisico normalizado "${def.id}" es invalido (debe ser un numero finito).` };
@@ -296,8 +311,8 @@ export function validarValoresAnalisis(payload) {
       return { ok: false, error: `El valor fisico normalizado "${def.id}" esta fuera del rango 0-100.` };
     }
   }
-  // 3. Consolidado (base, ajAntrop y total por variable física).
-  for (const def of DEFINICIONES_FISICAS) {
+  // 3. Consolidado heredado (base, ajAntrop y total por variable física), si el registro lo trae.
+  for (const def of (payload.consolidado === undefined ? [] : DEFINICIONES_FISICAS)) {
     const entrada = payload.consolidado[def.id];
     if (!esObjetoPlano(entrada)) {
       return { ok: false, error: `El consolidado de "${def.id}" es invalido (debe ser un objeto).` };

@@ -12,12 +12,14 @@
 import crypto from 'node:crypto';
 
 const ALGORITHM = 'aes-256-gcm';
+// AES-256 requiere una clave de exactamente 32 bytes = 64 caracteres hexadecimales.
+const CLAVE_HEX_REGEX = /^[0-9a-fA-F]{64}$/;
 
 /** Lee y valida FIELD_ENCRYPTION_KEY del entorno.
  * @returns {Buffer} clave de 32 bytes. */
 function obtenerClave() {
   const hex = process.env.FIELD_ENCRYPTION_KEY;
-  if (!hex || hex.length !== 64) {
+  if (!hex || !CLAVE_HEX_REGEX.test(hex)) {
     throw new Error(
       'FIELD_ENCRYPTION_KEY debe ser una cadena hexadecimal de 64 caracteres (32 bytes). ' +
       'Genérala con: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
