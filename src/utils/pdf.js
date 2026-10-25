@@ -62,9 +62,13 @@ function textoNoFirme(f) {
     ? f.motivosNoFirme
     : (f.carencias || []).map(c => ({ tipo: 'sin_dato', capacidad: c.capacidad, demanda: c.demanda }));
   if (motivos.length === 0) return 'demanda definitoria sin evaluar';
-  return motivos.map(m => (m.tipo === 'brecha_severa'
-    ? `${ETIQUETA_CAPACIDAD[m.capacidad] ?? m.capacidad} ${m.nivel} frente a demanda ${m.demanda}`
-    : `${ETIQUETA_CAPACIDAD[m.capacidad] ?? m.capacidad} sin dato (demanda ${m.demanda})`)).join('; ');
+  return motivos.map(m => {
+    if (m.tipo === 'valoracion_medica') return `valoración médica pendiente: manifestaste ${m.sintomas ?? 'dolor en el pecho o mareo o pérdida de consciencia'}`;
+    if (m.tipo === 'restriccion_seguridad') return `restricción: manifestaste tener ${m.condicion}; no se recomiendan las familias con ${m.motivo}`;
+    return m.tipo === 'brecha_severa'
+      ? `${ETIQUETA_CAPACIDAD[m.capacidad] ?? m.capacidad} ${m.nivel} frente a demanda ${m.demanda}`
+      : `${ETIQUETA_CAPACIDAD[m.capacidad] ?? m.capacidad} sin dato (demanda ${m.demanda})`;
+  }).join('; ');
 }
 
 /** Formatea una fecha ISO en español; devuelve el valor original si no es válida.
@@ -373,6 +377,8 @@ export function generarPdfInforme(payload, res) {
       });
       if (plan.fuente?.referencia) lineas.push(`Fuente: ${plan.fuente.referencia}`);
       cajaAviso(doc, lineas.filter(Boolean), TARJETA, MORADO);
+    } else if (plan?.tipo === 'valoracion_medica' || plan?.tipo === 'restricciones_seguridad') {
+      cajaAviso(doc, [plan.motivo || ''].filter(Boolean), TARJETA, MORADO);
     } else if (plan?.tipo === 'datos_insuficientes') {
       cajaAviso(doc, [`${plan.motivo || 'Faltan datos para recomendar.'} Datos faltantes: ${(plan.faltantes || []).map(c => ETIQUETA_CAPACIDAD[c] ?? c).join(', ')}.`], TARJETA, MORADO);
     } else {
