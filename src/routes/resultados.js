@@ -228,13 +228,26 @@ resultadosRouter.put('/:id', requireAuth, async (req, res) => {
 });
 
 resultadosRouter.delete('/:id', requireAuth, async (req, res) => {
-  const { error } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from('resultados_test')
     .delete()
     .eq('id', req.params.id)
-    .eq('usuario_id', req.usuario.id); // Nunca se confía solo en el id de la URL.
+    .eq('usuario_id', req.usuario.id) // Nunca se confía solo en el id de la URL.
+    .select('id');
 
   if (error) return res.status(500).json({ error: 'No se pudo borrar el resultado.' });
+  if (!data || data.length === 0) {
+    // Mismo mensaje si no existe o es ajeno, para no revelar registros de otros usuarios.
+    return res.status(404).json({ error: 'Registro no encontrado.' });
+  }
+
+  await supabaseAdmin.from('auditoria_accesos').insert({
+    usuario_id: req.usuario.id,
+    accion: 'eliminar_resultado',
+    detalle: { resultado_id: data[0].id },
+    ip_origen: req.ip,
+  });
+
   res.json({ ok: true });
 });
 
