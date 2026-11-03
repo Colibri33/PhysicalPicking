@@ -13,7 +13,6 @@ import { migrarRegistroLegado } from '../src/utils/registroLegado.js';
 
 const realesF = Object.fromEntries(DEFINICIONES_FISICAS.map(d => [d.id, d.min]));
 const fisicas = Object.fromEntries(DEFINICIONES_FISICAS.map(d => [d.id, 50]));
-// Registro válido de base; cada prueba lo modifica según el caso.
 const nuevo = () => ({
   participante: { nombre: 'X', edad: 22 }, realesF, fisicas,
   antropometricas: { peso: '70', talla: '', grasa: '', muscular: '', grasaVisc: '', imc: null },
