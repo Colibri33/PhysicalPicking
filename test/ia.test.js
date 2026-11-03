@@ -60,6 +60,7 @@ test('llamarDeepSeek: normaliza la URL base y no manda thinking con OpenRouter',
 
 test('llamarDeepSeek: clasifica 401/403, 429, vacía y red', async () => {
   const env = { DEEPSEEK_API_KEY: 'k', DEEPSEEK_BASE_URL: 'https://x.test/api/v1' };
+  // Llama al cliente con una respuesta simulada de ese código HTTP.
   const conStatus = async status => llamarDeepSeek([], {
     fetchImpl: async () => ({ ok: false, status, text: async () => 'error' }), env,
   });
@@ -105,6 +106,7 @@ test('mensajesChat incluye el resumen en el sistema', () => {
   assert.match(m[0].content, /"edad":20/);
 });
 
+// Envía una petición POST simulada a la ruta con el manejador dado.
 async function post(llamar, ruta, cuerpo) {
   const app = express(); app.use(express.json()); app.use('/ia', crearIaRouter({ llamar }));
   const srv = app.listen(0); const { port } = srv.address();
