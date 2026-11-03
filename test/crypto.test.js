@@ -15,7 +15,9 @@ import { cifrarJSON, descifrarJSON, bufferABytea, byteaABuffer } from '../src/ut
 const CLAVE_VALIDA = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 const CLAVE_VALIDA_OTRA = 'fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210';
 
+// Define la clave de cifrado válida en el entorno.
 function fijarClave() { process.env.FIELD_ENCRYPTION_KEY = CLAVE_VALIDA; }
+// Quita la clave del entorno.
 function limpiarClave() { delete process.env.FIELD_ENCRYPTION_KEY; }
 
 before(() => { fijarClave(); });
