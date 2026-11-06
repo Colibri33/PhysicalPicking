@@ -54,6 +54,13 @@ function esNumeroValido(n) {
   return typeof n === 'number' && Number.isFinite(n); // Rechaza NaN e Infinity.
 }
 
+/** Indica si un valor representa "sin dato" (vacío, nulo o indefinido).
+ * @param {*} v - valor a evaluar.
+ * @returns {boolean} true si no hay dato capturado. */
+function esSinDato(v) {
+  return v === null || v === undefined || v === '';
+}
+
 /** Valida un valor contra la definición de una variable (min, max, unidad); base para cualquier variable con rango.
  * @param {*} valor - valor recibido (puede venir como string).
  * @param {{id: string, min: number, max: number, paso?: number, unidad?: string}} definicion - definición de la variable.
@@ -297,6 +304,9 @@ export function validarValoresAnalisis(payload) {
 
   // 1. Valores crudos reales, cada uno contra su propio rango (kg, cm, nivel; nunca 0-100 genérico).
   for (const def of DEFINICIONES_FISICAS) {
+    // La resistencia aeróbica (Léger) es opcional: sin autorización del PAR-Q+ queda sin dato ('' / null) y no se exige.
+    // Si trae un valor, se valida igual contra su rango (nivel entero 1-21).
+    if (def.id === 'resistencia' && esSinDato(payload.realesF[def.id])) continue;
     const resultado = validarVariable(payload.realesF[def.id], def);
     if (!resultado.ok) return resultado;
   }

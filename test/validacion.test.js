@@ -28,6 +28,21 @@ test('payload v6 valido', () => {
   assert.deepEqual(validarValoresAnalisis(p), { ok: true });
 });
 
+test('resistencia (Léger) sin dato es válida; con valor fuera de rango se rechaza', () => {
+  for (const vacio of ['', null, undefined]) {
+    const p = nuevo();
+    p.realesF = { ...realesF, resistencia: vacio };
+    assert.equal(validarValoresAnalisis(p).ok, true);
+  }
+  const p = nuevo();
+  p.realesF = { ...realesF, resistencia: 99 };
+  assert.equal(validarValoresAnalisis(p).ok, false);
+  // Las demás capacidades siguen siendo obligatorias.
+  const q = nuevo();
+  q.realesF = { ...realesF, fuerza: '' };
+  assert.equal(validarValoresAnalisis(q).ok, false);
+});
+
 test('payload v6 sin campos cognitivos no se rechaza por su ausencia', () => {
   const p = nuevo();
   assert.ok(!('cognitivas' in p) && !('realesC' in p));
