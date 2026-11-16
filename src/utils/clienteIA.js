@@ -18,7 +18,7 @@ export const INTENTOS_MAX = 2; // Un reintento ante fallos transitorios (red, 42
  * @param {string} url - URL base configurada.
  * @returns {string} URL sin espacios ni barras finales. */
 export function normalizarBase(url) {
-  return String(url ?? '').trim().replace(/\/+$/, '');
+  return String(url ?? '').trim().replace(/\/+$/g, '');
 }
 
 /** Construye las cabeceras HTTP de la solicitud.
@@ -73,8 +73,7 @@ async function pedir({ fetchImpl, url, cuerpo, cabeceras, timeoutMs, modelo, bas
       try { detalle = (await r.text()).slice(0, 300); } catch { /* sin cuerpo */ }
       const e = new Error(`IA ${r.status} (${modelo} @ ${base}): ${detalle}`);
       e.codigo = (r.status === 401 || r.status === 403) ? 'auth'
-        : r.status === 429 ? 'limite'
-          : r.status >= 500 ? 'upstream' : 'upstream';
+        : r.status === 429 ? 'limite' : 'upstream';
       e.status = r.status;
       e.detalle = detalle;
       throw e;
