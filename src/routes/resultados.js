@@ -11,6 +11,7 @@
 
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
+import { registrarAuditoria } from '../utils/auditoria.js';
 import { supabaseAdmin } from '../supabaseAdmin.js';
 import { cifrarJSON, descifrarJSON } from '../utils/crypto.js';
 import { validarParticipante, validarPayloadAnalisis, validarValoresAnalisis } from '../utils/validacion.js';
@@ -108,7 +109,7 @@ resultadosRouter.post('/', requireAuth, async (req, res) => {
     return res.status(500).json({ error: 'No se pudo guardar el resultado.' });
   }
 
-  await supabaseAdmin.from('auditoria_accesos').insert({
+  await registrarAuditoria({
     usuario_id: req.usuario.id,
     accion: 'guardar_resultado',
     detalle: { resultado_id: data.id },
@@ -151,7 +152,7 @@ resultadosRouter.get('/', requireAuth, async (req, res) => {
     }
   }).filter(Boolean);
 
-  await supabaseAdmin.from('auditoria_accesos').insert({
+  await registrarAuditoria({
     usuario_id: req.usuario.id,
     accion: 'leer_historial',
     ip_origen: req.ip,
@@ -217,7 +218,7 @@ resultadosRouter.put('/:id', requireAuth, async (req, res) => {
     return res.status(404).json({ error: 'Registro no encontrado.' });
   }
 
-  await supabaseAdmin.from('auditoria_accesos').insert({
+  await registrarAuditoria({
     usuario_id: req.usuario.id,
     accion: 'editar_resultado',
     detalle: { resultado_id: data.id },
@@ -241,7 +242,7 @@ resultadosRouter.delete('/:id', requireAuth, async (req, res) => {
     return res.status(404).json({ error: 'Registro no encontrado.' });
   }
 
-  await supabaseAdmin.from('auditoria_accesos').insert({
+  await registrarAuditoria({
     usuario_id: req.usuario.id,
     accion: 'eliminar_resultado',
     detalle: { resultado_id: data[0].id },
@@ -275,7 +276,7 @@ resultadosRouter.get('/:id/pdf', requireAuth, async (req, res) => {
     return res.status(500).json({ error: 'No se pudo leer este registro.' });
   }
 
-  await supabaseAdmin.from('auditoria_accesos').insert({
+  await registrarAuditoria({
     usuario_id: req.usuario.id,
     accion: 'descargar_pdf',
     detalle: { resultado_id: fila.id },

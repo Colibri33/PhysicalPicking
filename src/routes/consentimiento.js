@@ -11,6 +11,7 @@
 
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
+import { registrarAuditoria } from '../utils/auditoria.js';
 import { supabaseAdmin } from '../supabaseAdmin.js';
 
 export const consentimientoRouter = Router();
@@ -42,7 +43,7 @@ consentimientoRouter.post('/', requireAuth, async (req, res) => {
 
   if (error) return res.status(500).json({ error: 'No se pudo registrar el consentimiento.' });
 
-  await supabaseAdmin.from('auditoria_accesos').insert({
+  await registrarAuditoria({
     usuario_id: req.usuario.id,
     accion: 'registrar_consentimiento',
     ip_origen: req.ip,

@@ -8,7 +8,10 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "lint": "eslint src test",
+    "lint:fix": "eslint src test --fix",
+    "coverage": "c8 --reporter=text --reporter=html npm test"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
@@ -18,5 +21,11 @@
     "express-rate-limit": "^7.4.0",
     "helmet": "^7.1.0",
     "pdfkit": "^0.20.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "c8": "^9.1.0",
+    "eslint": "^10.15.0",
+    "globals": "^17.14.0"
   }
 }

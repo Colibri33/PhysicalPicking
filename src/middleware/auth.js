@@ -22,11 +22,15 @@ export async function requireAuth(req, res, next) {
     return res.status(401).json({ error: 'Falta el token de autenticación.' });
   }
 
-  const { data, error } = await supabaseAdmin.auth.getUser(token);
-  if (error || !data?.user) {
-    return res.status(401).json({ error: 'Sesión inválida o expirada.' });
+  try {
+    const { data, error } = await supabaseAdmin.auth.getUser(token);
+    if (error || !data?.user) {
+      return res.status(401).json({ error: 'Sesión inválida o expirada.' });
+    }
+    req.usuario = { id: data.user.id, email: data.user.email };
+    next();
+  } catch (e) {
+    console.error('Fallo al validar la sesión con Supabase:', e?.message);
+    res.status(503).json({ error: 'No se pudo validar la sesión. Inténtalo de nuevo.' });
   }
-
-  req.usuario = { id: data.user.id, email: data.user.email };
-  next();
 }

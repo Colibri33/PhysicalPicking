@@ -11,6 +11,7 @@
 
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
+import { registrarAuditoria } from '../utils/auditoria.js';
 import { supabaseAdmin } from '../supabaseAdmin.js';
 import { descifrarJSON } from '../utils/crypto.js';
 import { migrarRegistroLegado } from '../utils/registroLegado.js';
@@ -43,7 +44,7 @@ arcoRouter.get('/exportar', requireAuth, async (req, res) => {
     }
   });
 
-  await supabaseAdmin.from('auditoria_accesos').insert({
+  await registrarAuditoria({
     usuario_id: usuarioId,
     accion: 'exportar_datos_arco',
     ip_origen: req.ip,
@@ -62,7 +63,7 @@ arcoRouter.delete('/cuenta', requireAuth, async (req, res) => {
   const usuarioId = req.usuario.id;
 
   // La auditoría se registra antes de borrar: después ya no existiría usuario_id al que enlazarla.
-  await supabaseAdmin.from('auditoria_accesos').insert({
+  await registrarAuditoria({
     usuario_id: usuarioId,
     accion: 'eliminar_cuenta',
     ip_origen: req.ip,

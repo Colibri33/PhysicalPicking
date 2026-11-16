@@ -137,15 +137,14 @@ test('rutas /ia: el estado de la IA distingue config, límite y caída', async (
   assert.equal(ERRORES_IA.upstream.status, 502);
 });
 
-test('GET /ia/estado reporta proveedor y modelo sin filtrar la clave', async () => {
+test('GET /ia/estado solo indica si hay IA configurada y no revela proveedor, modelo ni clave (VS-04)', async () => {
   const app = express(); app.use(express.json());
-  app.use('/ia', crearIaRouter({ llamar: async () => 'ok', env: { DEEPSEEK_API_KEY: 'secreto', DEEPSEEK_BASE_URL: 'https://openrouter.ai/api/v1', DEEPSEEK_MODEL: 'minimax/minimax-m3.1-flash:free' } }));
+  let llamadas = 0;
+  app.use('/ia', crearIaRouter({ llamar: async () => { llamadas++; return 'ok'; }, env: { DEEPSEEK_API_KEY: 'secreto', DEEPSEEK_BASE_URL: 'https://openrouter.ai/api/v1', DEEPSEEK_MODEL: 'minimax/minimax-m3.1-flash:free' } }));
   const srv = app.listen(0); const { port } = srv.address();
-  const r = await fetch(`http://127.0.0.1:${port}/ia/estado`);
+  const r = await fetch(`http://127.0.0.1:${port}/ia/estado?verificar=1`);
   const j = await r.json(); srv.close();
   assert.equal(r.status, 200);
-  assert.equal(j.configurado, true);
-  assert.equal(j.baseUrl, 'https://openrouter.ai/api/v1');
-  assert.equal(j.modelo, 'minimax/minimax-m3.1-flash:free');
-  assert.ok(!JSON.stringify(j).includes('secreto'));
+  assert.deepEqual(j, { configurado: true });
+  assert.equal(llamadas, 0, 'verificar=1 ya no debe hacer llamadas de pago');
 });

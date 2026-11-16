@@ -11,7 +11,7 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { validarResumen, validarMensajes, mensajesInterpretacion, mensajesChat } from '../utils/ia.js';
-import { llamarDeepSeek, normalizarBase, BASE_POR_DEFECTO, MODELO_POR_DEFECTO } from '../utils/clienteIA.js';
+import { llamarDeepSeek } from '../utils/clienteIA.js';
 
 /** Traduce el código de error de la capa IA a un status HTTP y un mensaje útil. */
 export const ERRORES_IA = {
@@ -49,23 +49,9 @@ export function crearIaRouter({ llamar = llamarDeepSeek, env = process.env } = {
     }
   }
 
-  // Diagnóstico del proveedor y modelo configurados; `?verificar=1` hace una llamada real (consume cuota).
-  router.get('/estado', async (_req, res) => {
-    const base = normalizarBase(env.DEEPSEEK_BASE_URL) || BASE_POR_DEFECTO;
-    const info = {
-      configurado: Boolean(env.DEEPSEEK_API_KEY),
-      baseUrl: base,
-      modelo: env.DEEPSEEK_MODEL || MODELO_POR_DEFECTO,
-    };
-    if (_req.query.verificar) {
-      try {
-        await llamar([{ role: 'user', content: 'ping' }]);
-        info.proveedor = { ok: true };
-      } catch (e) {
-        info.proveedor = { ok: false, codigo: e?.codigo || 'desconocido', status: e?.status ?? null, mensaje: e?.message };
-      }
-    }
-    res.json(info);
+  // Estado mínimo: solo indica si la IA está configurada. No revela proveedor, URL ni modelo y no consume cuota.
+  router.get('/estado', (_req, res) => {
+    res.json({ configurado: Boolean(env.DEEPSEEK_API_KEY) });
   });
 
   router.post('/interpretar', async (req, res) => {
